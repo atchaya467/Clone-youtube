@@ -2,18 +2,19 @@ import mongoose from "mongoose";
 const commentschema = mongoose.Schema(
   {
     userid: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "user",
+      type: String,
       required: true,
     },
     videoid: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "videofiles",
+      type: String,
       required: true,
     },
     commentbody: { type: String },
     usercommented: { type: String },
     commentedon: { type: Date, default: Date.now },
+    city: { type: String, default: "Unknown City" },
+    likes: { type: [String], default: [] },
+    dislikes: { type: [String], default: [] },
   },
   {
     timestamps: true,

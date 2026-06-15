@@ -5,6 +5,9 @@ import { Button } from "./ui/button";
 import { formatDistanceToNow } from "date-fns";
 import { useUser } from "@/lib/AuthContext";
 import axiosInstance from "@/lib/axiosinstance";
+import { ThumbsUp, ThumbsDown } from "lucide-react";
+import { toast } from "sonner";
+
 interface Comment {
   _id: string;
   videoid: string;
@@ -12,7 +15,23 @@ interface Comment {
   commentbody: string;
   usercommented: string;
   commentedon: string;
+  city?: string;
+  likes?: string[];
+  dislikes?: string[];
 }
+
+const LANGUAGES = [
+  { code: "en", name: "English" },
+  { code: "es", name: "Spanish" },
+  { code: "fr", name: "French" },
+  { code: "de", name: "German" },
+  { code: "hi", name: "Hindi" },
+  { code: "ja", name: "Japanese" },
+  { code: "zh", name: "Chinese" },
+  { code: "ar", name: "Arabic" },
+  { code: "ru", name: "Russian" },
+];
+
 const Comments = ({ videoId }: any) => {
   const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState("");
@@ -21,27 +40,40 @@ const Comments = ({ videoId }: any) => {
   const [editText, setEditText] = useState("");
   const { user } = useUser();
   const [loading, setLoading] = useState(true);
-  const fetchedComments = [
-    {
-      _id: "1",
-      videoid: videoId,
-      userid: "1",
-      commentbody: "Great video! Really enjoyed watching this.",
-      usercommented: "John Doe",
-      commentedon: new Date(Date.now() - 3600000).toISOString(),
-    },
-    {
-      _id: "2",
-      videoid: videoId,
-      userid: "2",
-      commentbody: "Thanks for sharing this amazing content!",
-      usercommented: "Jane Smith",
-      commentedon: new Date(Date.now() - 7200000).toISOString(),
-    },
-  ];
+  const [userCity, setUserCity] = useState("Seattle");
+
+  // Translation States
+  const [translations, setTranslations] = useState<{ [key: string]: { text: string; lang: string } }>({});
+  const [translatingIds, setTranslatingIds] = useState<{ [key: string]: boolean }>({});
+  const [selectedSourceLangs, setSelectedSourceLangs] = useState<{ [key: string]: string }>({});
+  const [selectedLangs, setSelectedLangs] = useState<{ [key: string]: string }>({});
+
   useEffect(() => {
     loadComments();
+    detectCity();
   }, [videoId]);
+
+  const detectCity = async () => {
+    try {
+      const res = await fetch("https://ipapi.co/json/");
+      const data = await res.json();
+      if (data && data.city && data.city !== "Reserved") {
+        setUserCity(data.city);
+        return;
+      }
+    } catch (e) {
+      console.error("Error fetching city:", e);
+    }
+    try {
+      const res = await fetch("https://ip-api.com/json/");
+      const data = await res.json();
+      if (data && data.city) {
+        setUserCity(data.city);
+      }
+    } catch (e) {
+      console.error("Error fetching city from ip-api:", e);
+    }
+  };
 
   const loadComments = async () => {
     try {
@@ -53,11 +85,20 @@ const Comments = ({ videoId }: any) => {
       setLoading(false);
     }
   };
+
   if (loading) {
     return <div>Loading history...</div>;
   }
+
   const handleSubmitComment = async () => {
     if (!user || !newComment.trim()) return;
+
+    // Special characters validation
+    const specialCharsRegex = /[@#$%^&*+=\[\]{}|\\<>\/~`]/;
+    if (specialCharsRegex.test(newComment)) {
+      toast.error("Comments containing special characters (@, #, $, etc.) are blocked!");
+      return;
+    }
 
     setIsSubmitting(true);
     try {
@@ -66,21 +107,29 @@ const Comments = ({ videoId }: any) => {
         userid: user._id,
         commentbody: newComment,
         usercommented: user.name,
+        city: userCity,
       });
       if (res.data.comment) {
+        const savedComment = res.data.data;
         const newCommentObj: Comment = {
-          _id: Date.now().toString(),
+          _id: savedComment?._id || Date.now().toString(),
           videoid: videoId,
           userid: user._id,
           commentbody: newComment,
           usercommented: user.name || "Anonymous",
-          commentedon: new Date().toISOString(),
+          commentedon: savedComment?.commentedon || new Date().toISOString(),
+          city: userCity,
+          likes: savedComment?.likes || [],
+          dislikes: savedComment?.dislikes || [],
         };
         setComments([newCommentObj, ...comments]);
+        toast.success("Comment posted successfully!");
       }
       setNewComment("");
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error adding comment:", error);
+      const errMsg = error.response?.data?.message || "Error adding comment";
+      toast.error(errMsg);
     } finally {
       setIsSubmitting(false);
     }
@@ -93,6 +142,14 @@ const Comments = ({ videoId }: any) => {
 
   const handleUpdateComment = async () => {
     if (!editText.trim()) return;
+
+    // Special characters validation
+    const specialCharsRegex = /[@#$%^&*+=\[\]{}|\\<>\/~`]/;
+    if (specialCharsRegex.test(editText)) {
+      toast.error("Comments containing special characters (@, #, $, etc.) are blocked!");
+      return;
+    }
+
     try {
       const res = await axiosInstance.post(
         `/comment/editcomment/${editingCommentId}`,
@@ -104,11 +161,17 @@ const Comments = ({ videoId }: any) => {
             c._id === editingCommentId ? { ...c, commentbody: editText } : c
           )
         );
+        if (editingCommentId) {
+          handleShowOriginal(editingCommentId);
+        }
         setEditingCommentId(null);
         setEditText("");
+        toast.success("Comment updated successfully!");
       }
-    } catch (error) {
+    } catch (error: any) {
       console.log(error);
+      const errMsg = error.response?.data?.message || "Error updating comment";
+      toast.error(errMsg);
     }
   };
 
@@ -117,11 +180,107 @@ const Comments = ({ videoId }: any) => {
       const res = await axiosInstance.delete(`/comment/deletecomment/${id}`);
       if (res.data.comment) {
         setComments((prev) => prev.filter((c) => c._id !== id));
+        toast.success("Comment deleted.");
       }
     } catch (error) {
       console.log(error);
     }
   };
+
+  const handleLikeComment = async (commentId: string) => {
+    if (!user) {
+      toast.error("Please login to like comments");
+      return;
+    }
+    try {
+      const res = await axiosInstance.post(`/comment/like/${commentId}`, {
+        userId: user._id,
+      });
+      if (res.data) {
+        setComments((prev) =>
+          prev.map((c) =>
+            c._id === commentId
+              ? { ...c, likes: res.data.likes, dislikes: res.data.dislikes }
+              : c
+          )
+        );
+      }
+    } catch (error) {
+      console.error("Error liking comment:", error);
+    }
+  };
+
+  const handleDislikeComment = async (commentId: string) => {
+    if (!user) {
+      toast.error("Please login to dislike comments");
+      return;
+    }
+    try {
+      const res = await axiosInstance.post(`/comment/dislike/${commentId}`, {
+        userId: user._id,
+      });
+      if (res.data.deleted) {
+        toast.info("Comment automatically removed due to community dislikes.");
+        setComments((prev) => prev.filter((c) => c._id !== commentId));
+      } else if (res.data) {
+        setComments((prev) =>
+          prev.map((c) =>
+            c._id === commentId
+              ? { ...c, likes: res.data.likes, dislikes: res.data.dislikes }
+              : c
+          )
+        );
+      }
+    } catch (error: any) {
+      console.error("Error disliking comment:", error);
+      if (error.response && error.response.status === 404) {
+        setComments((prev) => prev.filter((c) => c._id !== commentId));
+      }
+    }
+  };
+
+  const handleTranslate = async (commentId: string, text: string) => {
+    const sourceLang = selectedSourceLangs[commentId] || "en";
+    const targetLang = selectedLangs[commentId] || "es";
+    if (sourceLang === targetLang) {
+      toast.error("Source and target languages must be different!");
+      return;
+    }
+    setTranslatingIds((prev) => ({ ...prev, [commentId]: true }));
+    try {
+      const res = await fetch(
+        `https://api.mymemory.translated.net/get?q=${encodeURIComponent(
+          text
+        )}&langpair=${sourceLang}|${targetLang}`
+      );
+      const data = await res.json();
+      if (data && data.responseData && data.responseData.translatedText) {
+        setTranslations((prev) => ({
+          ...prev,
+          [commentId]: {
+            text: data.responseData.translatedText,
+            lang: targetLang,
+          },
+        }));
+      } else {
+        toast.error("Translation failed. Please try again.");
+      }
+    } catch (error) {
+      console.error("Translation error:", error);
+      toast.error("Error performing translation.");
+    } finally {
+      setTranslatingIds((prev) => ({ ...prev, [commentId]: false }));
+    }
+  };
+
+  const handleShowOriginal = (commentId: string) => {
+    setTranslations((prev) => {
+      const updated = { ...prev };
+      delete updated[commentId];
+      return updated;
+    });
+  };
+
   return (
     <div className="space-y-6">
       <h2 className="text-xl font-semibold">{comments.length} Comments</h2>
@@ -170,12 +329,17 @@ const Comments = ({ videoId }: any) => {
                 <AvatarFallback>{comment.usercommented[0]}</AvatarFallback>
               </Avatar>
               <div className="flex-1">
-                <div className="flex items-center gap-2 mb-1">
+                <div className="flex items-center gap-2 mb-1 flex-wrap">
                   <span className="font-medium text-sm">
                     {comment.usercommented}
                   </span>
+                  {comment.city && (
+                    <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full flex items-center gap-1 font-medium">
+                      📍 {comment.city}
+                    </span>
+                  )}
                   <span className="text-xs text-gray-600">
-                    {formatDistanceToNow(new Date(comment.commentedon))} ago
+                    • {formatDistanceToNow(new Date(comment.commentedon))} ago
                   </span>
                 </div>
 
@@ -205,17 +369,141 @@ const Comments = ({ videoId }: any) => {
                   </div>
                 ) : (
                   <>
-                    <p className="text-sm">{comment.commentbody}</p>
-                    {comment.userid === user?._id && (
-                      <div className="flex gap-2 mt-2 text-sm text-gray-500">
-                        <button onClick={() => handleEdit(comment)}>
-                          Edit
-                        </button>
-                        <button onClick={() => handleDelete(comment._id)}>
-                          Delete
-                        </button>
+                    <p className="text-sm">
+                      {translations[comment._id] ? (
+                        <span className="text-gray-800">
+                          {translations[comment._id].text}
+                          <span className="block text-xs text-gray-400 mt-1 italic">
+                            (Translated to{" "}
+                            {LANGUAGES.find(
+                              (l) => l.code === translations[comment._id].lang
+                            )?.name || translations[comment._id].lang}
+                            )
+                          </span>
+                        </span>
+                      ) : (
+                        comment.commentbody
+                      )}
+                    </p>
+                    <div className="flex items-center gap-4 mt-2 text-xs text-gray-600">
+                      {/* Like Button */}
+                      <button
+                        onClick={() => handleLikeComment(comment._id)}
+                        className={`flex items-center gap-1 hover:text-black transition-colors ${
+                          comment.likes?.includes(user?._id)
+                            ? "text-blue-600 font-bold"
+                            : ""
+                        }`}
+                      >
+                        <ThumbsUp
+                          className={`w-3.5 h-3.5 ${
+                            comment.likes?.includes(user?._id)
+                              ? "fill-blue-600 text-blue-600"
+                              : ""
+                          }`}
+                        />
+                        <span>{comment.likes?.length || 0}</span>
+                      </button>
+
+                      {/* Dislike Button */}
+                      <button
+                        onClick={() => handleDislikeComment(comment._id)}
+                        className={`flex items-center gap-1 hover:text-black transition-colors ${
+                          comment.dislikes?.includes(user?._id)
+                            ? "text-red-600 font-bold"
+                            : ""
+                        }`}
+                      >
+                        <ThumbsDown
+                          className={`w-3.5 h-3.5 ${
+                            comment.dislikes?.includes(user?._id)
+                              ? "fill-red-600 text-red-600"
+                              : ""
+                          }`}
+                        />
+                        <span>{comment.dislikes?.length || 0}</span>
+                      </button>
+
+                      {/* Translation Options */}
+                      <div className="flex items-center gap-1.5 border-l pl-3 border-gray-200 flex-wrap">
+                        {translations[comment._id] ? (
+                          <button
+                            onClick={() => handleShowOriginal(comment._id)}
+                            className="text-xs text-blue-600 hover:underline font-medium"
+                          >
+                            Show original
+                          </button>
+                        ) : (
+                          <div className="flex items-center gap-1 flex-wrap">
+                            <span className="text-gray-400 text-[10px]">From:</span>
+                            <select
+                              value={selectedSourceLangs[comment._id] || "en"}
+                              onChange={(e) =>
+                                setSelectedSourceLangs((prev) => ({
+                                  ...prev,
+                                  [comment._id]: e.target.value,
+                                }))
+                              }
+                              className="text-xs bg-transparent border border-gray-200 rounded px-1 py-0.5 focus:outline-none cursor-pointer hover:bg-gray-50"
+                            >
+                              {LANGUAGES.map((lang) => (
+                                <option key={lang.code} value={lang.code}>
+                                  {lang.name}
+                                </option>
+                              ))}
+                            </select>
+
+                            <span className="text-gray-400 text-[10px]">To:</span>
+
+                            <select
+                              value={selectedLangs[comment._id] || "es"}
+                              onChange={(e) =>
+                                setSelectedLangs((prev) => ({
+                                  ...prev,
+                                  [comment._id]: e.target.value,
+                                }))
+                              }
+                              className="text-xs bg-transparent border border-gray-200 rounded px-1 py-0.5 focus:outline-none cursor-pointer hover:bg-gray-50"
+                            >
+                              {LANGUAGES.map((lang) => (
+                                <option key={lang.code} value={lang.code}>
+                                  {lang.name}
+                                </option>
+                              ))}
+                            </select>
+                            <button
+                              onClick={() =>
+                                handleTranslate(comment._id, comment.commentbody)
+                              }
+                              disabled={translatingIds[comment._id]}
+                              className="text-xs text-blue-600 hover:underline font-medium disabled:opacity-50"
+                            >
+                              {translatingIds[comment._id]
+                                ? "Translating..."
+                                : "Translate"}
+                            </button>
+                          </div>
+                        )}
                       </div>
-                    )}
+
+                      {/* Edit / Delete (only for owner) */}
+                      {comment.userid === user?._id && (
+                        <div className="flex gap-2 border-l pl-3 border-gray-200">
+                          <button
+                            onClick={() => handleEdit(comment)}
+                            className="hover:text-black"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleDelete(comment._id)}
+                            className="hover:text-red-600"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </>
                 )}
               </div>

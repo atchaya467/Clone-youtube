@@ -33,11 +33,23 @@ app.listen(PORT, () => {
 });
 
 const DBURL = process.env.DB_URL;
-mongoose
-  .connect(DBURL)
-  .then(() => {
-    console.log("Mongodb connected");
-  })
-  .catch((error) => {
-    console.log(error);
-  });
+if (DBURL) {
+  mongoose
+    .connect(DBURL)
+    .then(() => {
+      console.log("Mongodb connected");
+    })
+    .catch((error) => {
+      console.log("Mongodb connection error:", error.message);
+    });
+} else {
+  console.log("WARNING: DB_URL environment variable is not defined. Attempting local MongoDB connection as fallback...");
+  mongoose
+    .connect("mongodb://127.0.0.1:27017/youtube")
+    .then(() => {
+      console.log("Mongodb connected to local fallback");
+    })
+    .catch((error) => {
+      console.log("Could not connect to fallback local MongoDB. Database features will be disabled until DB_URL is configured.");
+    });
+}

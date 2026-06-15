@@ -37,20 +37,21 @@ const VideoInfo = ({ video }: any) => {
 
   useEffect(() => {
     const handleviews = async () => {
-      if (user) {
-        try {
-          return await axiosInstance.post(`/history/${video._id}`, {
+      if (!video?._id) return;
+      try {
+        if (user) {
+          await axiosInstance.post(`/history/${video._id}`, {
             userId: user?._id,
           });
-        } catch (error) {
-          return console.log(error);
+        } else {
+          await axiosInstance.post(`/history/views/${video._id}`);
         }
-      } else {
-        return await axiosInstance.post(`/history/views/${video?._id}`);
+      } catch (error) {
+        console.log("Error updating views:", error);
       }
     };
     handleviews();
-  }, [user]);
+  }, [user, video?._id]);
   const handleLike = async () => {
     if (!user) return;
     try {
