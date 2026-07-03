@@ -35,26 +35,30 @@ const VideoInfo = ({ video }: any) => {
   };
 
   const handleDownload = async () => {
+    console.log("handleDownload: started, user:", user, "video:", video);
     if (!user) {
       alert("Please sign in to download videos.");
       return;
     }
 
     try {
+      console.log("handleDownload: checking eligibility...");
       const res = await axiosInstance.post("/download/check", {
         userId: user._id,
         videoId: video._id,
       });
 
+      console.log("handleDownload: eligibility res:", res.data);
       if (res.data.allowed) {
         const downloadUrl = buildApiUrl(video.filepath);
+        console.log("handleDownload: trigger download url:", downloadUrl);
         triggerFileDownload(downloadUrl, video.filename || `${video.videotitle}.mp4`);
       }
     } catch (error: any) {
+      console.error("handleDownload: error encountered:", error);
       if (error.response && error.response.status === 403) {
         setIsPremiumModalOpen(true);
       } else {
-        console.error("Error during download:", error);
         alert(error.response?.data?.message || "Error processing download.");
       }
     }
