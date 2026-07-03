@@ -74,6 +74,35 @@ export const useRazorpayUpgrade = (user, upgradeUserLocally) => {
         },
       };
 
+      const isPlaceholderKey = options.key === "rzp_test_placeholderID";
+
+      if (isPlaceholderKey) {
+        const confirmMock = window.confirm(
+          "[Test Mode] No Razorpay API Keys are configured. Would you like to simulate a successful payment of ₹199 to test the premium upgrade?"
+        );
+        if (confirmMock) {
+          try {
+            const verifyRes = await axiosInstance.post("/payment/verify", {
+              razorpay_payment_id: `pay_mock_${Date.now()}`,
+              razorpay_order_id: order.id,
+              razorpay_signature: "mock_signature",
+              userId: user._id,
+            });
+
+            if (verifyRes.data.success) {
+              upgradeUserLocally();
+              alert("Congratulations! Your simulated payment was verified and you have been upgraded to Premium.");
+            } else {
+              alert("Payment verification failed.");
+            }
+          } catch (err) {
+            console.error("Verification error:", err);
+            alert("Error verifying payment.");
+          }
+        }
+        return;
+      }
+
       const paymentObject = new window.Razorpay(options);
       paymentObject.open();
     } catch (error) {
