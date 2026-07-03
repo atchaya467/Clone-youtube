@@ -33,6 +33,8 @@ app.use(
 app.use(express.json({ limit: "30mb", extended: true }));
 app.use(express.urlencoded({ limit: "30mb", extended: true }));
 app.use("/uploads", express.static(path.join("uploads")));
+let lastDbError = null;
+
 app.get("/", (req, res) => {
   res.send("You tube backend is working");
 });
@@ -42,9 +44,10 @@ app.get("/db-status", (req, res) => {
     return res.json({ status: "disconnected", error: "DB_URL env var is missing/undefined" });
   }
   const connectionState = ["disconnected", "connected", "connecting", "disconnecting"][mongoose.connection.readyState];
-  const censoredUrl = dbUrl.substring(0, 15) + "..." + dbUrl.substring(dbUrl.length - 15);
+  const censoredUrl = dbUrl.substring(0, Math.min(25, dbUrl.length)) + "..." + dbUrl.substring(Math.max(0, dbUrl.length - 25));
   res.json({
     status: connectionState,
+    error: lastDbError,
     urlLength: dbUrl.length,
     urlPreview: censoredUrl,
     hasQuotes: dbUrl.startsWith('"') || dbUrl.startsWith("'") || dbUrl.endsWith('"') || dbUrl.endsWith("'"),
@@ -70,9 +73,11 @@ if (DBURL) {
     .connect(DBURL)
     .then(() => {
       console.log("Mongodb connected");
+      lastDbError = null;
     })
     .catch((error) => {
       console.log("Mongodb connection error:", error.message);
+      lastDbError = error.message;
     });
 } else {
   console.log("WARNING: DB_URL environment variable is not defined. Attempting local MongoDB connection as fallback...");
@@ -80,8 +85,10 @@ if (DBURL) {
     .connect("mongodb://127.0.0.1:27017/youtube")
     .then(() => {
       console.log("Mongodb connected to local fallback");
+      lastDbError = null;
     })
     .catch((error) => {
       console.log("Could not connect to fallback local MongoDB. Database features will be disabled until DB_URL is configured.");
+      lastDbError = error.message;
     });
 }
