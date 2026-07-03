@@ -4,6 +4,9 @@ export const API_BASE_URL =
 export const buildApiUrl = (path = "") => {
   if (!path) return API_BASE_URL;
   if (path.startsWith("http")) return path;
+  if (path.startsWith("/video/") || path.startsWith("video/")) {
+    return path.startsWith("/") ? path : `/${path}`;
+  }
 
   const base = API_BASE_URL.replace(/\/$/, "");
   const cleanPath = path.replace(/^\//, "");
