@@ -45,7 +45,7 @@ export const deletecomment = async (req, res) => {
 
 export const editcomment = async (req, res) => {
   const { id: _id } = req.params;
-  const { commentbody } = req.body;
+  const { commentbody, city } = req.body;
   if (!mongoose.Types.ObjectId.isValid(_id)) {
     return res.status(404).send("comment unavailable");
   }
@@ -58,7 +58,7 @@ export const editcomment = async (req, res) => {
 
   try {
     const updatecomment = await comment.findByIdAndUpdate(_id, {
-      $set: { commentbody: commentbody },
+      $set: { commentbody: commentbody, city: city },
     }, { new: true });
     res.status(200).json(updatecomment);
   } catch (error) {

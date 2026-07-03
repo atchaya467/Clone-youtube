@@ -38,6 +38,9 @@ const Comments = ({ videoId }: any) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
+  const [editCity, setEditCity] = useState("");
+  const [isEditingLocation, setIsEditingLocation] = useState(false);
+  const [isEditingEditLocation, setIsEditingEditLocation] = useState(false);
   const { user } = useUser();
   const [loading, setLoading] = useState(true);
   const [userCity, setUserCity] = useState("Seattle");
@@ -54,24 +57,55 @@ const Comments = ({ videoId }: any) => {
   }, [videoId]);
 
   const detectCity = async () => {
-    try {
-      const res = await fetch("https://ipapi.co/json/");
-      const data = await res.json();
-      if (data && data.city && data.city !== "Reserved") {
-        setUserCity(data.city);
-        return;
+    const detectCityByIP = async () => {
+      try {
+        const res = await fetch("https://ipapi.co/json/");
+        const data = await res.json();
+        if (data && data.city && data.city !== "Reserved") {
+          setUserCity(data.city);
+          return;
+        }
+      } catch (e) {
+        console.error("Error fetching city from ipapi:", e);
       }
-    } catch (e) {
-      console.error("Error fetching city:", e);
-    }
-    try {
-      const res = await fetch("https://ip-api.com/json/");
-      const data = await res.json();
-      if (data && data.city) {
-        setUserCity(data.city);
+      try {
+        const res = await fetch("https://ip-api.com/json/");
+        const data = await res.json();
+        if (data && data.city) {
+          setUserCity(data.city);
+        }
+      } catch (e) {
+        console.error("Error fetching city from ip-api:", e);
       }
-    } catch (e) {
-      console.error("Error fetching city from ip-api:", e);
+    };
+
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          try {
+            const { latitude, longitude } = position.coords;
+            const res = await fetch(
+              `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`
+            );
+            const data = await res.json();
+            const city = data.city || data.locality || data.principalSubdivision;
+            if (city) {
+              setUserCity(city);
+              return;
+            }
+          } catch (e) {
+            console.error("Error reverse geocoding:", e);
+          }
+          await detectCityByIP();
+        },
+        async (error) => {
+          console.warn("Geolocation permission denied or error:", error);
+          await detectCityByIP();
+        },
+        { enableHighAccuracy: true, timeout: 5000 }
+      );
+    } else {
+      await detectCityByIP();
     }
   };
 
@@ -138,6 +172,7 @@ const Comments = ({ videoId }: any) => {
   const handleEdit = (comment: Comment) => {
     setEditingCommentId(comment._id);
     setEditText(comment.commentbody);
+    setEditCity(comment.city || "");
   };
 
   const handleUpdateComment = async () => {
@@ -153,12 +188,12 @@ const Comments = ({ videoId }: any) => {
     try {
       const res = await axiosInstance.post(
         `/comment/editcomment/${editingCommentId}`,
-        { commentbody: editText }
+        { commentbody: editText, city: editCity }
       );
       if (res.data) {
         setComments((prev) =>
           prev.map((c) =>
-            c._id === editingCommentId ? { ...c, commentbody: editText } : c
+            c._id === editingCommentId ? { ...c, commentbody: editText, city: editCity } : c
           )
         );
         if (editingCommentId) {
@@ -166,6 +201,7 @@ const Comments = ({ videoId }: any) => {
         }
         setEditingCommentId(null);
         setEditText("");
+        setEditCity("");
         toast.success("Comment updated successfully!");
       }
     } catch (error: any) {
@@ -298,20 +334,47 @@ const Comments = ({ videoId }: any) => {
               onChange={(e: any) => setNewComment(e.target.value)}
               className="min-h-[80px] resize-none border-0 border-b-2 rounded-none focus-visible:ring-0"
             />
-            <div className="flex gap-2 justify-end">
-              <Button
-                variant="ghost"
-                onClick={() => setNewComment("")}
-                disabled={!newComment.trim()}
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={handleSubmitComment}
-                disabled={!newComment.trim() || isSubmitting}
-              >
-                Comment
-              </Button>
+            <div className="flex justify-between items-center gap-2 flex-wrap">
+              <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                <span>📍 Location:</span>
+                {isEditingLocation ? (
+                  <input
+                    type="text"
+                    value={userCity}
+                    onChange={(e) => setUserCity(e.target.value)}
+                    onBlur={() => setIsEditingLocation(false)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") setIsEditingLocation(false);
+                    }}
+                    placeholder="City name"
+                    className="px-2 py-0.5 text-xs border border-gray-300 rounded focus:outline-none focus:border-black bg-white w-28"
+                    autoFocus
+                  />
+                ) : (
+                  <span
+                    onClick={() => setIsEditingLocation(true)}
+                    className="cursor-pointer hover:underline text-gray-700 bg-gray-100 px-2 py-0.5 rounded-full font-medium"
+                    title="Click to edit location"
+                  >
+                    {userCity || "Unknown Location"} (edit)
+                  </span>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="ghost"
+                  onClick={() => setNewComment("")}
+                  disabled={!newComment.trim()}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleSubmitComment}
+                  disabled={!newComment.trim() || isSubmitting}
+                >
+                  Comment
+                </Button>
+              </div>
             </div>
           </div>
         </div>
@@ -349,22 +412,50 @@ const Comments = ({ videoId }: any) => {
                       value={editText}
                       onChange={(e) => setEditText(e.target.value)}
                     />
-                    <div className="flex gap-2 justify-end">
-                      <Button
-                        onClick={handleUpdateComment}
-                        disabled={!editText.trim()}
-                      >
-                        Save
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        onClick={() => {
-                          setEditingCommentId(null);
-                          setEditText("");
-                        }}
-                      >
-                        Cancel
-                      </Button>
+                    <div className="flex justify-between items-center gap-2 flex-wrap">
+                      <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                        <span>📍 Location:</span>
+                        {isEditingEditLocation ? (
+                          <input
+                            type="text"
+                            value={editCity}
+                            onChange={(e) => setEditCity(e.target.value)}
+                            onBlur={() => setIsEditingEditLocation(false)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") setIsEditingEditLocation(false);
+                            }}
+                            placeholder="City name"
+                            className="px-2 py-0.5 text-xs border border-gray-300 rounded focus:outline-none focus:border-black bg-white w-28"
+                            autoFocus
+                          />
+                        ) : (
+                          <span
+                            onClick={() => setIsEditingEditLocation(true)}
+                            className="cursor-pointer hover:underline text-gray-700 bg-gray-100 px-2 py-0.5 rounded-full font-medium"
+                            title="Click to edit location"
+                          >
+                            {editCity || "Unknown Location"} (edit)
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          onClick={handleUpdateComment}
+                          disabled={!editText.trim()}
+                        >
+                          Save
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          onClick={() => {
+                            setEditingCommentId(null);
+                            setEditText("");
+                            setEditCity("");
+                          }}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 ) : (
