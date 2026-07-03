@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef } from "react";
+import { buildApiUrl } from "@/lib/api";
 
 interface VideoPlayerProps {
   video: {
@@ -22,7 +23,7 @@ export default function VideoPlayer({ video }: VideoPlayerProps) {
         poster={`/placeholder.svg?height=480&width=854`}
       >
         <source
-          src={video?.filepath?.startsWith("http") ? video.filepath : `${process.env.BACKEND_URL || 'http://localhost:5000'}/${video?.filepath}`}
+          src={buildApiUrl(video?.filepath)}
           type="video/mp4"
         />
         Your browser does not support the video tag.

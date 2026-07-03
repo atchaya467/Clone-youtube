@@ -12,7 +12,24 @@ import commentroutes from "./routes/comment.js";
 dotenv.config();
 const app = express();
 import path from "path";
-app.use(cors());
+const allowedOrigins = [
+  "http://localhost:3000",
+  "https://clone-youtube-lrby.vercel.app",
+  /https:\/\/clone-youtube-.*\.vercel\.app$/,
+];
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true);
+      const isAllowed = allowedOrigins.some((o) =>
+        typeof o === "string" ? o === origin : o.test(origin)
+      );
+      if (isAllowed) return callback(null, true);
+      return callback(new Error("Not allowed by CORS"));
+    },
+    credentials: true,
+  })
+);
 app.use(express.json({ limit: "30mb", extended: true }));
 app.use(express.urlencoded({ limit: "30mb", extended: true }));
 app.use("/uploads", express.static(path.join("uploads")));
