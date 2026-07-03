@@ -36,6 +36,21 @@ app.use("/uploads", express.static(path.join("uploads")));
 app.get("/", (req, res) => {
   res.send("You tube backend is working");
 });
+app.get("/db-status", (req, res) => {
+  const dbUrl = process.env.DB_URL;
+  if (!dbUrl) {
+    return res.json({ status: "disconnected", error: "DB_URL env var is missing/undefined" });
+  }
+  const connectionState = ["disconnected", "connected", "connecting", "disconnecting"][mongoose.connection.readyState];
+  const censoredUrl = dbUrl.substring(0, 15) + "..." + dbUrl.substring(dbUrl.length - 15);
+  res.json({
+    status: connectionState,
+    urlLength: dbUrl.length,
+    urlPreview: censoredUrl,
+    hasQuotes: dbUrl.startsWith('"') || dbUrl.startsWith("'") || dbUrl.endsWith('"') || dbUrl.endsWith("'"),
+    trimmedLength: dbUrl.trim().length,
+  });
+});
 app.use(bodyParser.json());
 app.use("/user", userroutes);
 app.use("/video", videoroutes);
