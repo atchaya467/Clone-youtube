@@ -5,7 +5,7 @@ import { API_BASE_URL } from "@/lib/api";
 
 const MOCK_VIDEOS = [
   {
-    _id: "1",
+    _id: "66851f5c6e84d412e8790001",
     videotitle: "Amazing Nature Documentary",
     filename: "nature-doc.mp4",
     filetype: "video/mp4",
@@ -18,7 +18,7 @@ const MOCK_VIDEOS = [
     createdAt: new Date().toISOString(),
   },
   {
-    _id: "2",
+    _id: "66851f5c6e84d412e8790002",
     videotitle: "Cooking Tutorial: Perfect Pasta",
     filename: "pasta-tutorial.mp4",
     filetype: "video/mp4",
