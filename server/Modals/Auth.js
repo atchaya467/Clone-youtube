@@ -6,6 +6,7 @@ const userschema = mongoose.Schema({
   description: { type: String },
   image: { type: String },
   joinedon: { type: Date, default: Date.now },
+  isPremium: { type: Boolean, default: false },
 });
 
 export default mongoose.model("user", userschema);

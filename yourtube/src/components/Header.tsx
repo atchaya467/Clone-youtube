@@ -1,4 +1,4 @@
-import { Bell, Menu, Mic, Search, User, VideoIcon } from "lucide-react";
+import { Bell, Menu, Mic, Search, User, VideoIcon, Crown } from "lucide-react";
 import React, { useState } from "react";
 import { Button } from "./ui/button";
 import Link from "next/link";
@@ -14,9 +14,11 @@ import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import Channeldialogue from "./channeldialogue";
 import { useRouter } from "next/router";
 import { useUser } from "@/lib/AuthContext";
+import { useRazorpayUpgrade } from "@/lib/useRazorpay";
 
 const Header = () => {
-  const { user, logout, handlegooglesignin } = useUser();
+  const { user, logout, handlegooglesignin, upgradeUserLocally } = useUser();
+  const { triggerUpgrade } = useRazorpayUpgrade(user, upgradeUserLocally);
   // const user: any = {
   //   id: "1",
   //   name: "John Doe",
@@ -80,6 +82,12 @@ const Header = () => {
       <div className="flex items-center gap-2">
         {user ? (
           <>
+            {user.isPremium && (
+              <span className="flex items-center gap-1 text-[11px] font-bold bg-amber-100 text-amber-700 px-2 py-1 rounded-full border border-amber-300">
+                <Crown className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
+                PREMIUM
+              </span>
+            )}
             <Button variant="ghost" size="icon">
               <VideoIcon className="w-6 h-6" />
             </Button>
@@ -99,6 +107,24 @@ const Header = () => {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent className="w-56" align="end" forceMount>
+                {user?.isPremium ? (
+                  <div className="px-2 py-1.5 text-xs text-amber-600 font-bold flex items-center gap-1">
+                    <Crown className="w-4 h-4 fill-amber-500 text-amber-500" />
+                    Premium Member
+                  </div>
+                ) : (
+                  <div className="px-2 py-1">
+                    <Button
+                      variant="default"
+                      size="sm"
+                      className="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs"
+                      onClick={triggerUpgrade}
+                    >
+                      👑 Get Premium (₹199)
+                    </Button>
+                  </div>
+                )}
+                <DropdownMenuSeparator />
                 {user?.channelname ? (
                   <DropdownMenuItem asChild>
                     <Link href={`/channel/${user?._id}`}>Your channel</Link>

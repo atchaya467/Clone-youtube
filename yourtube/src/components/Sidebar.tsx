@@ -6,20 +6,24 @@ import {
   ThumbsUp,
   History,
   User,
+  Download,
+  Crown,
 } from "lucide-react";
 import Link from "next/link";
 import React, { useState } from "react";
 import { Button } from "./ui/button";
 import Channeldialogue from "./channeldialogue";
 import { useUser } from "@/lib/AuthContext";
+import { useRazorpayUpgrade } from "@/lib/useRazorpay";
 
 const Sidebar = () => {
-  const { user } = useUser();
+  const { user, upgradeUserLocally } = useUser();
+  const { triggerUpgrade } = useRazorpayUpgrade(user, upgradeUserLocally);
 
   const [isdialogeopen, setisdialogeopen] = useState(false);
   return (
-    <aside className="w-64 bg-white  border-r min-h-screen p-2">
-      <nav className="space-y-1">
+    <aside className="w-64 bg-white  border-r min-h-screen p-2 flex flex-col justify-between">
+      <nav className="space-y-1 flex-1">
         <Link href="/">
           <Button variant="ghost" className="w-full justify-start">
             <Home className="w-5 h-5 mr-3" />
@@ -60,8 +64,14 @@ const Sidebar = () => {
                   Watch later
                 </Button>
               </Link>
+              <Link href="/downloads">
+                <Button variant="ghost" className="w-full justify-start">
+                  <Download className="w-5 h-5 mr-3" />
+                  Downloads
+                </Button>
+              </Link>
               {user?.channelname ? (
-                <Link href={`/channel/${user.id}`}>
+                <Link href={`/channel/${user._id || user.id}`}>
                   <Button variant="ghost" className="w-full justify-start">
                     <User className="w-5 h-5 mr-3" />
                     Your channel
@@ -83,6 +93,27 @@ const Sidebar = () => {
           </>
         )}
       </nav>
+
+      {user && !user.isPremium && (
+        <div className="border-t pt-4 mt-4 px-2 pb-4">
+          <div className="bg-gradient-to-br from-amber-500 to-orange-600 rounded-lg p-3 text-white shadow-md text-left">
+            <h4 className="text-xs font-bold uppercase tracking-wider flex items-center gap-1">
+              <Crown className="w-4 h-4 text-yellow-200 fill-yellow-200" />
+              Go Premium
+            </h4>
+            <p className="text-[11px] mt-1 opacity-90 leading-tight">
+              Unlock unlimited video downloads and support the platform!
+            </p>
+            <Button 
+              onClick={triggerUpgrade}
+              className="w-full mt-3 bg-white hover:bg-yellow-50 text-orange-600 font-bold text-xs py-1.5 rounded shadow"
+            >
+              Upgrade (₹199)
+            </Button>
+          </div>
+        </div>
+      )}
+
       <Channeldialogue
         isopen={isdialogeopen}
         onclose={() => setisdialogeopen(false)}

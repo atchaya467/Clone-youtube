@@ -38,7 +38,24 @@ export const UserProvider = ({ children }) => {
       console.error(error);
     }
   };
+  const upgradeUserLocally = () => {
+    if (user) {
+      const updatedUser = { ...user, isPremium: true };
+      setUser(updatedUser);
+      localStorage.setItem("user", JSON.stringify(updatedUser));
+    }
+  };
+
   useEffect(() => {
+    const localUser = localStorage.getItem("user");
+    if (localUser) {
+      try {
+        setUser(JSON.parse(localUser));
+      } catch (err) {
+        console.error("Error parsing stored user:", err);
+      }
+    }
+
     const unsubcribe = onAuthStateChanged(auth, async (firebaseuser) => {
       if (firebaseuser) {
         try {
@@ -59,7 +76,7 @@ export const UserProvider = ({ children }) => {
   }, []);
 
   return (
-    <UserContext.Provider value={{ user, login, logout, handlegooglesignin }}>
+    <UserContext.Provider value={{ user, login, logout, handlegooglesignin, upgradeUserLocally }}>
       {children}
     </UserContext.Provider>
   );

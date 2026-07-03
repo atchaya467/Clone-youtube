@@ -8,10 +8,14 @@ import {
   Share,
   ThumbsDown,
   ThumbsUp,
+  Crown,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useUser } from "@/lib/AuthContext";
 import axiosInstance from "@/lib/axiosinstance";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "./ui/dialog";
+import { useRazorpayUpgrade } from "@/lib/useRazorpay";
+import { buildApiUrl } from "@/lib/api";
 
 const VideoInfo = ({ video }: any) => {
   const [likes, setlikes] = useState(video.Like || 0);
@@ -19,8 +23,60 @@ const VideoInfo = ({ video }: any) => {
   const [isLiked, setIsLiked] = useState(false);
   const [isDisliked, setIsDisliked] = useState(false);
   const [showFullDescription, setShowFullDescription] = useState(false);
-  const { user } = useUser();
+  const { user, upgradeUserLocally } = useUser();
   const [isWatchLater, setIsWatchLater] = useState(false);
+  const [isPremiumModalOpen, setIsPremiumModalOpen] = useState(false);
+
+  const { triggerUpgrade } = useRazorpayUpgrade(user, upgradeUserLocally);
+
+  const handleUpgradeClick = () => {
+    setIsPremiumModalOpen(false);
+    triggerUpgrade();
+  };
+
+  const handleDownload = async () => {
+    if (!user) {
+      alert("Please sign in to download videos.");
+      return;
+    }
+
+    try {
+      const res = await axiosInstance.post("/download/check", {
+        userId: user._id,
+        videoId: video._id,
+      });
+
+      if (res.data.allowed) {
+        const downloadUrl = buildApiUrl(video.filepath);
+        triggerFileDownload(downloadUrl, video.filename || `${video.videotitle}.mp4`);
+      }
+    } catch (error: any) {
+      if (error.response && error.response.status === 403) {
+        setIsPremiumModalOpen(true);
+      } else {
+        console.error("Error during download:", error);
+        alert(error.response?.data?.message || "Error processing download.");
+      }
+    }
+  };
+
+  const triggerFileDownload = async (url: string, filename: string) => {
+    try {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+      console.error("Error downloading file via blob, falling back to window.open", error);
+      window.open(url, "_blank");
+    }
+  };
 
   // const user: any = {
   //   id: "1",
@@ -180,6 +236,7 @@ const VideoInfo = ({ video }: any) => {
             variant="ghost"
             size="sm"
             className="bg-gray-100 rounded-full"
+            onClick={handleDownload}
           >
             <Download className="w-5 h-5 mr-2" />
             Download
@@ -213,6 +270,42 @@ const VideoInfo = ({ video }: any) => {
           {showFullDescription ? "Show less" : "Show more"}
         </Button>
       </div>
+
+      <Dialog open={isPremiumModalOpen} onOpenChange={setIsPremiumModalOpen}>
+        <DialogContent className="sm:max-w-md text-center bg-white">
+          <DialogHeader className="flex flex-col items-center">
+            <div className="bg-amber-100 p-3 rounded-full mb-2">
+              <Crown className="w-8 h-8 text-amber-500 fill-amber-500" />
+            </div>
+            <DialogTitle className="text-xl font-bold">Go Premium</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-sm text-gray-600">
+              You have reached your daily download limit (1 download per day).
+            </p>
+            <p className="text-sm font-semibold text-gray-800 mt-2">
+              Upgrade to Premium for ₹199 to enjoy unlimited downloads and exclusive features!
+            </p>
+          </div>
+          <DialogFooter className="flex flex-col sm:flex-row gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsPremiumModalOpen(false)}
+              className="flex-1"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={handleUpgradeClick}
+              className="flex-1 bg-amber-500 hover:bg-amber-600 text-white font-bold"
+            >
+              Upgrade Now (₹199)
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
