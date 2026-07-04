@@ -38,9 +38,9 @@ export const UserProvider = ({ children }) => {
       console.error(error);
     }
   };
-  const upgradeUserLocally = () => {
+  const upgradeUserLocally = (updatedData) => {
     if (user) {
-      const updatedUser = { ...user, isPremium: true };
+      const updatedUser = { ...user, isPremium: true, ...updatedData };
       setUser(updatedUser);
       localStorage.setItem("user", JSON.stringify(updatedUser));
     }
