@@ -16,8 +16,16 @@ const loadRazorpayScript = () => {
 
 export const useRazorpayUpgrade = (user, upgradeUserLocally) => {
   const triggerUpgrade = async (planName, amount) => {
+    let finalPlanName = "Gold";
+    let finalAmount = 100;
+
+    if (typeof planName === "string") {
+      finalPlanName = planName;
+      finalAmount = typeof amount === "number" ? amount : 100;
+    }
+
     if (!user) {
-      alert(`Please sign in to upgrade to ${planName}.`);
+      alert(`Please sign in to upgrade to ${finalPlanName}.`);
       return;
     }
 
@@ -30,7 +38,7 @@ export const useRazorpayUpgrade = (user, upgradeUserLocally) => {
     try {
       // 1. Create order on backend
       const orderRes = await axiosInstance.post("/payment/order", {
-        amount: amount,
+        amount: finalAmount,
       });
 
       const order = orderRes.data;
@@ -40,8 +48,8 @@ export const useRazorpayUpgrade = (user, upgradeUserLocally) => {
         key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || "rzp_test_placeholderID",
         amount: order.amount,
         currency: order.currency,
-        name: `YourTube ${planName} Plan`,
-        description: `Upgrade to ${planName} plan access`,
+        name: `YourTube ${finalPlanName} Plan`,
+        description: `Upgrade to ${finalPlanName} plan access`,
         image: user.image || "https://github.com/shadcn.png",
         order_id: order.id,
         handler: async function (response) {
@@ -52,13 +60,13 @@ export const useRazorpayUpgrade = (user, upgradeUserLocally) => {
               razorpay_order_id: response.razorpay_order_id,
               razorpay_signature: response.razorpay_signature || "",
               userId: user._id,
-              plan: planName,
-              amount: amount,
+              plan: finalPlanName,
+              amount: finalAmount,
             });
 
             if (verifyRes.data.success) {
               upgradeUserLocally(verifyRes.data.user);
-              alert(`Congratulations! Your payment was verified and you have been upgraded to the ${planName} plan.`);
+              alert(`Congratulations! Your payment was verified and you have been upgraded to the ${finalPlanName} plan.`);
             } else {
               alert("Payment verification failed. Please contact support.");
             }
@@ -80,7 +88,7 @@ export const useRazorpayUpgrade = (user, upgradeUserLocally) => {
 
       if (isPlaceholderKey) {
         const confirmMock = window.confirm(
-          `[Test Mode] No Razorpay API Keys are configured. Would you like to simulate a successful payment of ₹${amount} to test the ${planName} plan upgrade?`
+          `[Test Mode] No Razorpay API Keys are configured. Would you like to simulate a successful payment of ₹${finalAmount} to test the ${finalPlanName} plan upgrade?`
         );
         if (confirmMock) {
           try {
@@ -89,13 +97,13 @@ export const useRazorpayUpgrade = (user, upgradeUserLocally) => {
               razorpay_order_id: order.id,
               razorpay_signature: "mock_signature",
               userId: user._id,
-              plan: planName,
-              amount: amount,
+              plan: finalPlanName,
+              amount: finalAmount,
             });
 
             if (verifyRes.data.success) {
               upgradeUserLocally(verifyRes.data.user);
-              alert(`Congratulations! Your simulated payment was verified and you have been upgraded to the ${planName} plan.`);
+              alert(`Congratulations! Your simulated payment was verified and you have been upgraded to the ${finalPlanName} plan.`);
             } else {
               alert("Payment verification failed.");
             }
