@@ -32,10 +32,11 @@ export default function WatchLaterContent() {
 
     try {
       const watchLaterData = await axiosInstance.get(`/watch/${user?._id}`);
-
-      setWatchLater(watchLaterData.data);
+      // Filter out any entries where the corresponding video has been deleted/null
+      const validItems = (watchLaterData.data || []).filter((item: any) => item.videoid);
+      setWatchLater(validItems);
     } catch (error) {
-      console.error("Error loading history:", error);
+      console.error("Error loading watch later:", error);
     } finally {
       setLoading(false);
     }
@@ -44,12 +45,16 @@ export default function WatchLaterContent() {
   if (loading) {
     return <div>Loading watch later...</div>;
   }
-  const handleRemoveFromWatchLater = async (watchLaterId: string) => {
+  const handleRemoveFromWatchLater = async (watchLaterId: string, videoId: string) => {
+    if (!user) return;
     try {
-      console.log("Removing from history:", watchLaterId);
+      console.log("Removing from watch later:", watchLaterId);
+      await axiosInstance.post(`/watch/${videoId}`, {
+        userId: user._id,
+      });
       setWatchLater(watchLater.filter((item) => item._id !== watchLaterId));
     } catch (error) {
-      console.error("Error removing from history:", error);
+      console.error("Error removing from watch later:", error);
     }
   };
 
@@ -129,7 +134,7 @@ export default function WatchLaterContent() {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem
-                  onClick={() => handleRemoveFromWatchLater(item._id)}
+                  onClick={() => handleRemoveFromWatchLater(item._id, item.videoid._id)}
                 >
                   <X className="w-4 h-4 mr-2" />
                   Remove from Watch later

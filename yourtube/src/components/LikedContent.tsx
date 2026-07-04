@@ -32,8 +32,8 @@ export default function LikedVideosContent() {
 
     try {
       const likedData = await axiosInstance.get(`/like/${user?._id}`);
-
-      setLikedVideos(likedData.data);
+      const validItems = (likedData.data || []).filter((item: any) => item.videoid);
+      setLikedVideos(validItems);
     } catch (error) {
       console.error("Error loading liked videos:", error);
     } finally {
@@ -45,7 +45,10 @@ export default function LikedVideosContent() {
     if (!user) return;
 
     try {
-      console.log("Unliking video:", videoId, "for user:", user.id);
+      console.log("Unliking video:", videoId, "for user:", user._id);
+      await axiosInstance.post(`/like/${videoId}`, {
+        userId: user._id,
+      });
       setLikedVideos(likedVideos.filter((item) => item._id !== likedVideoId));
     } catch (error) {
       console.error("Error unliking video:", error);

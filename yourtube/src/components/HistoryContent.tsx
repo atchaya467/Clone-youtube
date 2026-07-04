@@ -34,7 +34,9 @@ export default function HistoryContent() {
 
     try {
       const historyData = await axiosInstance.get(`/history/${user?._id}`);
-      setHistory(historyData.data);
+      // Filter out any entries where the corresponding video has been deleted/null
+      const validItems = (historyData.data || []).filter((item: any) => item.videoid);
+      setHistory(validItems);
     } catch (error) {
       console.error("Error loading history:", error);
     } finally {

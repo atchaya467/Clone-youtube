@@ -93,7 +93,30 @@ const VideoInfo = ({ video }: any) => {
     setDislikes(video.Dislike || 0);
     setIsLiked(false);
     setIsDisliked(false);
+    setIsWatchLater(false);
   }, [video]);
+
+  useEffect(() => {
+    const checkWatchLaterAndLikeStatus = async () => {
+      if (!user || !video?._id) return;
+      try {
+        const watchLaterRes = await axiosInstance.get(`/watch/${user._id}`);
+        const savedInWatchLater = watchLaterRes.data.some(
+          (item: any) => item.videoid && item.videoid._id === video._id
+        );
+        setIsWatchLater(savedInWatchLater);
+
+        const likedRes = await axiosInstance.get(`/like/${user._id}`);
+        const likedVideo = likedRes.data.some(
+          (item: any) => item.videoid && item.videoid._id === video._id
+        );
+        setIsLiked(likedVideo);
+      } catch (error) {
+        console.error("Error checking watch/like status:", error);
+      }
+    };
+    checkWatchLaterAndLikeStatus();
+  }, [user, video?._id]);
 
   useEffect(() => {
     const handleviews = async () => {
