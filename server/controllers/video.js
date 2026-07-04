@@ -26,7 +26,37 @@ export const uploadvideo = async (req, res) => {
 };
 export const getallvideo = async (req, res) => {
   try {
-    const files = await video.find();
+    let files = await video.find();
+    if (files.length === 0) {
+      const MOCK_VIDEOS = [
+        {
+          _id: "66851f5c6e84d412e8790001",
+          videotitle: "Amazing Nature Documentary",
+          filename: "nature-doc.mp4",
+          filetype: "video/mp4",
+          filepath: "/video/vdo.mp4",
+          filesize: "500MB",
+          videochanel: "Nature Channel",
+          Like: 1250,
+          views: 45000,
+          uploader: "nature_lover",
+        },
+        {
+          _id: "66851f5c6e84d412e8790002",
+          videotitle: "Cooking Tutorial: Perfect Pasta",
+          filename: "pasta-tutorial.mp4",
+          filetype: "video/mp4",
+          filepath: "/video/vdo.mp4",
+          filesize: "300MB",
+          videochanel: "Chef's Kitchen",
+          Like: 890,
+          views: 23000,
+          uploader: "chef_master",
+        }
+      ];
+      await video.insertMany(MOCK_VIDEOS);
+      files = await video.find();
+    }
     return res.status(200).send(files);
   } catch (error) {
     console.error(" error:", error);
