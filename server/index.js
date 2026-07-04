@@ -56,6 +56,70 @@ app.get("/db-status", (req, res) => {
     trimmedLength: dbUrl.trim().length,
   });
 });
+
+app.get("/location", async (req, res) => {
+  let clientIp = req.headers["x-forwarded-for"] || req.socket.remoteAddress || "";
+  
+  if (clientIp.includes(",")) {
+    clientIp = clientIp.split(",")[0].trim();
+  }
+  if (clientIp.startsWith("::ffff:")) {
+    clientIp = clientIp.replace("::ffff:", "");
+  }
+
+  const isLocalIp =
+    clientIp === "127.0.0.1" ||
+    clientIp === "::1" ||
+    clientIp.startsWith("192.168.") ||
+    clientIp.startsWith("10.") ||
+    clientIp.startsWith("172.16.") ||
+    !clientIp;
+
+  const queryUrl = isLocalIp
+    ? "https://freeipapi.com/api/json"
+    : `https://freeipapi.com/api/json/${clientIp}`;
+
+  try {
+    const apiRes = await fetch(queryUrl);
+    const data = await apiRes.json();
+    if (data && data.cityName) {
+      return res.status(200).json({ city: data.cityName });
+    }
+  } catch (error) {
+    console.error("Error geolocating on server (freeipapi):", error.message);
+  }
+
+  const ipWhoIsUrl = isLocalIp
+    ? "https://ipwho.is/"
+    : `https://ipwho.is/${clientIp}`;
+
+  try {
+    const apiRes = await fetch(ipWhoIsUrl);
+    const data = await apiRes.json();
+    if (data && data.success && data.city) {
+      return res.status(200).json({ city: data.city });
+    }
+  } catch (error) {
+    console.error("Error geolocating on server (ipwho.is):", error.message);
+  }
+
+  const ipApiCoUrl = isLocalIp
+    ? "https://ipapi.co/json/"
+    : `https://ipapi.co/${clientIp}/json/`;
+
+  try {
+    const apiRes = await fetch(ipApiCoUrl);
+    const data = await apiRes.json();
+    if (data && data.city && data.city !== "Reserved") {
+      return res.status(200).json({ city: data.city });
+    }
+  } catch (error) {
+    console.error("Error geolocating on server (ipapi.co):", error.message);
+  }
+
+  return res.status(200).json({ city: "Coimbatore" });
+});
+
 app.use(bodyParser.json());
 app.use("/user", userroutes);
 app.use("/video", videoroutes);

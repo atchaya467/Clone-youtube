@@ -57,79 +57,38 @@ const Comments = ({ videoId }: any) => {
   }, [videoId]);
 
   const detectCity = async () => {
-    const detectCityByIP = async () => {
-      // 1. Try freeipapi.com (HTTPS, keyless)
-      try {
-        console.log("Detecting location via freeipapi.com...");
-        const res = await fetch("https://freeipapi.com/api/json");
-        const data = await res.json();
-        if (data && data.cityName) {
-          console.log("Location detected (freeipapi):", data.cityName);
-          setUserCity(data.cityName);
-          return;
-        }
-      } catch (e) {
-        console.error("Error fetching city from freeipapi:", e);
+    try {
+      console.log("Fetching location from backend server...");
+      const res = await axiosInstance.get("/location");
+      if (res.data && res.data.city) {
+        console.log("Location detected from server:", res.data.city);
+        setUserCity(res.data.city);
       }
-
-      // 2. Try ipwho.is (HTTPS, keyless)
-      try {
-        console.log("Detecting location via ipwho.is...");
-        const res = await fetch("https://ipwho.is/");
-        const data = await res.json();
-        if (data && data.success && data.city) {
-          console.log("Location detected (ipwho.is):", data.city);
-          setUserCity(data.city);
-          return;
-        }
-      } catch (e) {
-        console.error("Error fetching city from ipwho.is:", e);
-      }
-
-      // 3. Try ipapi.co (HTTPS, keyless fallback)
-      try {
-        console.log("Detecting location via ipapi.co...");
-        const res = await fetch("https://ipapi.co/json/");
-        const data = await res.json();
-        if (data && data.city && data.city !== "Reserved") {
-          console.log("Location detected (ipapi.co):", data.city);
-          setUserCity(data.city);
-          return;
-        }
-      } catch (e) {
-        console.error("Error fetching city from ipapi.co:", e);
-      }
-    };
-
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        async (position) => {
-          try {
-            const { latitude, longitude } = position.coords;
-            console.log("Browser geolocation acquired. Reverse-geocoding...");
-            const res = await fetch(
-              `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`
-            );
-            const data = await res.json();
-            const city = data.city || data.locality || data.principalSubdivision;
-            if (city) {
-              console.log("Location reverse-geocoded successfully:", city);
-              setUserCity(city);
-              return;
+    } catch (error) {
+      console.error("Error fetching location from server, falling back to browser geolocation:", error);
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          async (position) => {
+            try {
+              const { latitude, longitude } = position.coords;
+              const res = await fetch(
+                `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`
+              );
+              const data = await res.json();
+              const city = data.city || data.locality || data.principalSubdivision;
+              if (city) {
+                setUserCity(city);
+              }
+            } catch (e) {
+              console.error("Error reverse geocoding on client:", e);
             }
-          } catch (e) {
-            console.error("Error reverse geocoding:", e);
-          }
-          await detectCityByIP();
-        },
-        async (error) => {
-          console.warn("Geolocation permission denied or error:", error);
-          await detectCityByIP();
-        },
-        { enableHighAccuracy: true, timeout: 5000 }
-      );
-    } else {
-      await detectCityByIP();
+          },
+          (error) => {
+            console.warn("Browser geolocation permission denied or error:", error);
+          },
+          { enableHighAccuracy: true, timeout: 5000 }
+        );
+      }
     }
   };
 
