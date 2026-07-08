@@ -19,6 +19,7 @@ export const UserProvider = ({ children }) => {
   const [phoneInput, setPhoneInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+  const [debugOtp, setDebugOtp] = useState("");
 
   const login = (userdata) => {
     setUser(userdata);
@@ -62,10 +63,12 @@ export const UserProvider = ({ children }) => {
         setOtpSentTo(data.otpSentTo);
         setOtpChannelDetail(data.otpSentTo === "email" ? data.email : data.phone);
         setRequirePhoneReg(false);
+        setDebugOtp(data.debugOtp || "");
         setShowOtpModal(true);
       } else if (data.requirePhoneRegistration) {
         setTempUserId(data.tempUserId);
         setRequirePhoneReg(true);
+        setDebugOtp("");
         setShowOtpModal(true);
       } else {
         login(data.result);
@@ -88,10 +91,12 @@ export const UserProvider = ({ children }) => {
           setOtpSentTo(data.otpSentTo);
           setOtpChannelDetail(data.otpSentTo === "email" ? data.email : data.phone);
           setRequirePhoneReg(false);
+          setDebugOtp(data.debugOtp || "");
           setShowOtpModal(true);
         } else if (data.requirePhoneRegistration) {
           setTempUserId(data.tempUserId);
           setRequirePhoneReg(true);
+          setDebugOtp("");
           setShowOtpModal(true);
         } else {
           login(data.result);
@@ -127,10 +132,12 @@ export const UserProvider = ({ children }) => {
         setOtpSentTo(data.otpSentTo);
         setOtpChannelDetail(data.otpSentTo === "email" ? data.email : data.phone);
         setRequirePhoneReg(false);
+        setDebugOtp(data.debugOtp || "");
         setShowOtpModal(true);
       } else if (data.requirePhoneRegistration) {
         setTempUserId(data.tempUserId);
         setRequirePhoneReg(true);
+        setDebugOtp("");
         setShowOtpModal(true);
       } else {
         login(data.result);
@@ -159,6 +166,7 @@ export const UserProvider = ({ children }) => {
         setOtpSentTo(data.otpSentTo);
         setOtpChannelDetail(data.phone);
         setRequirePhoneReg(false);
+        setDebugOtp(data.debugOtp || "");
       }
     } catch (err) {
       console.error(err);
@@ -237,10 +245,12 @@ export const UserProvider = ({ children }) => {
               setOtpSentTo(data.otpSentTo);
               setOtpChannelDetail(data.otpSentTo === "email" ? data.email : data.phone);
               setRequirePhoneReg(false);
+              setDebugOtp(data.debugOtp || "");
               setShowOtpModal(true);
             } else if (data.requirePhoneRegistration) {
               setTempUserId(data.tempUserId);
               setRequirePhoneReg(true);
+              setDebugOtp("");
               setShowOtpModal(true);
             } else {
               login(data.result);
@@ -306,6 +316,11 @@ export const UserProvider = ({ children }) => {
                 <p className="text-sm text-slate-500 dark:text-slate-400 font-normal">
                   We've sent a 6-digit OTP code to your <span className="font-semibold text-slate-900 dark:text-white">{otpSentTo === "email" ? "Email Address" : "Mobile Number"}</span> ({otpChannelDetail}).
                 </p>
+                {debugOtp && (
+                  <div className="p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/60 rounded-xl text-xs text-amber-800 dark:text-amber-300 font-medium">
+                    🔑 <strong>Developer Demo Helper:</strong> The generated code sent to your mock channel is <span className="font-bold underline text-sm tracking-wider text-amber-900 dark:text-amber-200 ml-1">{debugOtp}</span>
+                  </div>
+                )}
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">
                     One-Time Password (OTP)

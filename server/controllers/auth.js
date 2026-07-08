@@ -180,6 +180,7 @@ export const login = async (req, res) => {
         otpSentTo: "email",
         email: user.email,
         tempUserId: user._id,
+        debugOtp: otp,
       });
     } else {
       if (!user.phone) {
@@ -200,6 +201,7 @@ export const login = async (req, res) => {
           otpSentTo: "mobile",
           phone: user.phone,
           tempUserId: user._id,
+          debugOtp: otp,
         });
       }
     }
@@ -237,6 +239,7 @@ export const registerPhone = async (req, res) => {
       requireOtp: true,
       otpSentTo: "mobile",
       phone: phone,
+      debugOtp: otp,
     });
   } catch (error) {
     console.error("Register phone error:", error);
