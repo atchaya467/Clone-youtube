@@ -160,6 +160,7 @@ const Header = () => {
                 <DropdownMenuItem onClick={logout}>Sign out</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+          </>
         ) : (
           <>
             <Button
