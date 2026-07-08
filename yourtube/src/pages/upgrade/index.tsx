@@ -80,13 +80,13 @@ export default function UpgradePage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 py-12 px-4 sm:px-6 lg:px-8 text-slate-900 dark:text-slate-100 transition-colors duration-200">
       <div className="max-w-7xl mx-auto">
         <div className="text-center max-w-3xl mx-auto mb-16">
-          <h1 className="text-4xl font-extrabold text-slate-900 tracking-tight sm:text-5xl">
+          <h1 className="text-4xl font-extrabold text-slate-900 dark:text-white tracking-tight sm:text-5xl">
             Upgrade Your Viewing Plan
           </h1>
-          <p className="mt-4 text-xl text-slate-500">
+          <p className="mt-4 text-xl text-slate-500 dark:text-slate-400">
             Choose a plan that fits your watching schedule. Get more time, better quality, and premium features.
           </p>
         </div>
@@ -99,10 +99,10 @@ export default function UpgradePage() {
             return (
               <div
                 key={plan.name}
-                className={`bg-white rounded-2xl overflow-hidden border transition-all duration-300 relative flex flex-col justify-between ${
+                className={`bg-white dark:bg-slate-900 rounded-2xl overflow-hidden border transition-all duration-300 relative flex flex-col justify-between ${
                   isCurrent
                     ? "border-orange-500 ring-2 ring-orange-500/20 scale-[1.03]"
-                    : "border-slate-200 hover:border-slate-300 hover:-translate-y-1 shadow-sm hover:shadow-md"
+                    : "border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 hover:-translate-y-1 shadow-sm hover:shadow-md"
                 }`}
               >
                 {isCurrent && (
@@ -116,15 +116,15 @@ export default function UpgradePage() {
                     <Icon className="w-6 h-6" />
                   </div>
 
-                  <h3 className="text-2xl font-bold text-slate-900 mb-2">{plan.name}</h3>
-                  <p className="text-sm text-slate-400 mb-6">{plan.limitText}</p>
+                  <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">{plan.name}</h3>
+                  <p className="text-sm text-slate-400 dark:text-slate-500 mb-6">{plan.limitText}</p>
 
                   <div className="flex items-baseline mb-8">
-                    <span className="text-4xl font-extrabold text-slate-900">₹{plan.price}</span>
-                    <span className="text-slate-500 ml-2">/ one-time</span>
+                    <span className="text-4xl font-extrabold text-slate-900 dark:text-white">₹{plan.price}</span>
+                    <span className="text-slate-500 dark:text-slate-450 ml-2">/ one-time</span>
                   </div>
 
-                  <ul className="space-y-4 text-sm text-slate-600">
+                  <ul className="space-y-4 text-sm text-slate-600 dark:text-slate-300">
                     {plan.features.map((feature, i) => (
                       <li key={i} className="flex items-start">
                         <Check className="w-5 h-5 text-emerald-500 shrink-0 mr-3 mt-0.5" />
@@ -134,16 +134,16 @@ export default function UpgradePage() {
                   </ul>
                 </div>
 
-                <div className="p-8 bg-slate-50 border-t border-slate-100">
+                <div className="p-8 bg-slate-50 dark:bg-slate-950 border-t border-slate-100 dark:border-slate-850">
                   <button
                     onClick={() => handleSelectPlan(plan.name, plan.price)}
                     disabled={isCurrent || plan.name === "Free"}
                     className={`w-full py-3 px-4 rounded-xl text-center text-sm font-semibold transition-all duration-200 ${
                       isCurrent
-                        ? "bg-slate-100 text-slate-400 cursor-default"
+                        ? "bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 cursor-default"
                         : plan.name === "Free"
-                        ? "bg-slate-200 text-slate-500 cursor-default"
-                        : "bg-slate-900 hover:bg-slate-800 text-white shadow-sm hover:shadow-md"
+                        ? "bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400 cursor-default"
+                        : "bg-slate-900 hover:bg-slate-800 text-white dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white shadow-sm hover:shadow-md"
                     }`}
                   >
                     {isCurrent ? "Active" : plan.name === "Free" ? "Default" : `Upgrade to ${plan.name}`}

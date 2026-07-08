@@ -67,6 +67,12 @@ app.get("/location", async (req, res) => {
     clientIp = clientIp.replace("::ffff:", "");
   }
 
+  // Developer testing override
+  const overrideState = req.query.overrideState || req.body.overrideState;
+  if (overrideState) {
+    return res.status(200).json({ city: "Override City", state: overrideState });
+  }
+
   const isLocalIp =
     clientIp === "127.0.0.1" ||
     clientIp === "::1" ||
@@ -83,7 +89,7 @@ app.get("/location", async (req, res) => {
     const apiRes = await fetch(queryUrl);
     const data = await apiRes.json();
     if (data && data.cityName) {
-      return res.status(200).json({ city: data.cityName });
+      return res.status(200).json({ city: data.cityName, state: data.regionName || "Tamil Nadu" });
     }
   } catch (error) {
     console.error("Error geolocating on server (freeipapi):", error.message);
@@ -97,7 +103,7 @@ app.get("/location", async (req, res) => {
     const apiRes = await fetch(ipWhoIsUrl);
     const data = await apiRes.json();
     if (data && data.success && data.city) {
-      return res.status(200).json({ city: data.city });
+      return res.status(200).json({ city: data.city, state: data.region || "Tamil Nadu" });
     }
   } catch (error) {
     console.error("Error geolocating on server (ipwho.is):", error.message);
@@ -111,13 +117,13 @@ app.get("/location", async (req, res) => {
     const apiRes = await fetch(ipApiCoUrl);
     const data = await apiRes.json();
     if (data && data.city && data.city !== "Reserved") {
-      return res.status(200).json({ city: data.city });
+      return res.status(200).json({ city: data.city, state: data.region || "Tamil Nadu" });
     }
   } catch (error) {
     console.error("Error geolocating on server (ipapi.co):", error.message);
   }
 
-  return res.status(200).json({ city: "Coimbatore" });
+  return res.status(200).json({ city: "Coimbatore", state: "Tamil Nadu" });
 });
 
 app.use(bodyParser.json());

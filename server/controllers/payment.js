@@ -174,3 +174,25 @@ export const verifyPayment = async (req, res) => {
     return res.status(500).json({ message: "Something went wrong during verification" });
   }
 };
+
+export const setFreePlan = async (req, res) => {
+  const { userId } = req.body;
+  if (!userId) {
+    return res.status(400).json({ message: "userId is required" });
+  }
+  try {
+    const updatedUser = await users.findByIdAndUpdate(
+      userId,
+      { $set: { isPremium: false, plan: "Free" } },
+      { new: true }
+    );
+    return res.status(200).json({
+      success: true,
+      message: "Plan updated to Free successfully.",
+      user: updatedUser,
+    });
+  } catch (error) {
+    console.error("Error setting plan to free:", error);
+    return res.status(500).json({ message: "Something went wrong" });
+  }
+};

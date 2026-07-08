@@ -8,6 +8,9 @@ const userschema = mongoose.Schema({
   joinedon: { type: Date, default: Date.now },
   isPremium: { type: Boolean, default: false },
   plan: { type: String, enum: ["Free", "Bronze", "Silver", "Gold"], default: "Free" },
+  phone: { type: String },
+  otp: { type: String },
+  otpExpiry: { type: Date },
 });
 
 export default mongoose.model("user", userschema);

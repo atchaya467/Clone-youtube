@@ -40,7 +40,7 @@ const Header = () => {
     }
   };
   return (
-    <header className="flex items-center justify-between px-4 py-2 bg-white border-b">
+    <header className="flex items-center justify-between px-4 py-2 bg-white dark:bg-slate-900 border-b dark:border-slate-850 text-slate-900 dark:text-white transition-colors duration-200">
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="icon">
           <Menu className="w-6 h-6" />
@@ -66,11 +66,11 @@ const Header = () => {
             value={searchQuery}
             onKeyPress={handleKeypress}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="rounded-l-full border-r-0 focus-visible:ring-0"
+            className="rounded-l-full border-r-0 focus-visible:ring-0 dark:bg-slate-950 dark:border-slate-800 dark:text-white dark:placeholder-slate-500"
           />
           <Button
             type="submit"
-            className="rounded-r-full px-6 bg-gray-50 hover:bg-gray-100 text-gray-600 border border-l-0"
+            className="rounded-r-full px-6 bg-gray-50 dark:bg-slate-800 hover:bg-gray-100 dark:hover:bg-slate-755 text-gray-600 dark:text-slate-300 border border-l-0 dark:border-slate-800"
           >
             <Search className="w-5 h-5" />
           </Button>
