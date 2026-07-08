@@ -44,18 +44,13 @@ export default function App({ Component, pageProps }: AppProps) {
           ];
           const isSouthIndia = southIndiaStates.includes(stateName.toLowerCase());
 
-          // IST Time Check
+          // Robust, cross-browser timezone-independent IST Time Check
           const now = new Date();
-          const options: Intl.DateTimeFormatOptions = { 
-            timeZone: "Asia/Kolkata", 
-            hour: "2-digit", 
-            minute: "2-digit", 
-            hour12: false 
-          };
-          const formatter = new Intl.DateTimeFormat("en-US", options);
-          const parts = formatter.formatToParts(now);
-          const hour = Number(parts.find(p => p.type === "hour")?.value);
-          const minute = Number(parts.find(p => p.type === "minute")?.value);
+          const utc = now.getTime() + now.getTimezoneOffset() * 60000;
+          const istOffset = 5.5 * 3600000; // IST is UTC + 5:30
+          const istTime = new Date(utc + istOffset);
+          const hour = istTime.getHours();
+          const minute = istTime.getMinutes();
 
           const totalMinutes = hour * 60 + minute;
           const start = 10 * 60; // 10:00 AM
