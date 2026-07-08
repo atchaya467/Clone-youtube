@@ -63,3 +63,17 @@ export const getallvideo = async (req, res) => {
     return res.status(500).json({ message: "Something went wrong" });
   }
 };
+
+export const deletevideo = async (req, res) => {
+  const { id } = req.params;
+  try {
+    const deletedVideo = await video.findByIdAndDelete(id);
+    if (!deletedVideo) {
+      return res.status(404).json({ message: "Video not found" });
+    }
+    return res.status(200).json({ message: "Video deleted successfully" });
+  } catch (error) {
+    console.error("Error deleting video:", error);
+    return res.status(500).json({ message: "Something went wrong" });
+  }
+};

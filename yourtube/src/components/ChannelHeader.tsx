@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Avatar, AvatarFallback } from "./ui/avatar";
 import { Button } from "./ui/button";
 
-const ChannelHeader = ({ channel, user }: any) => {
+const ChannelHeader = ({ channel, user, videoCount }: any) => {
   const [isSubscribed, setIsSubscribed] = useState(false);
   return (
     <div className="w-full">
@@ -14,14 +14,18 @@ const ChannelHeader = ({ channel, user }: any) => {
         <div className="flex flex-col md:flex-row gap-6 items-start">
           <Avatar className="w-20 h-20 md:w-32 md:h-32">
             <AvatarFallback className="text-2xl">
-              {channel?.channelname[0]}
+              {channel?.channelname?.[0] || "C"}
             </AvatarFallback>
           </Avatar>
 
           <div className="flex-1 space-y-2">
             <h1 className="text-2xl md:text-4xl font-bold">{channel?.channelname}</h1>
-            <div className="flex flex-wrap gap-4 text-sm text-gray-600">
-              <span>@{channel?.channelname.toLowerCase().replace(/\s+/g, "")}</span>
+            <div className="flex flex-wrap gap-2 items-center text-sm text-slate-500 dark:text-slate-400">
+              <span>@{channel?.channelname?.toLowerCase().replace(/\s+/g, "")}</span>
+              <span>•</span>
+              <span className="font-semibold text-slate-700 dark:text-slate-300">
+                {videoCount || 0} {videoCount === 1 ? "video" : "videos"}
+              </span>
             </div>
             {channel?.description && (
               <p className="text-sm text-gray-700 max-w-2xl">
