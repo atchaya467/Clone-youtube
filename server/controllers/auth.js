@@ -1,6 +1,8 @@
 import mongoose from "mongoose";
 import users from "../Modals/Auth.js";
 import nodemailer from "nodemailer";
+import fs from "fs";
+import path from "path";
 
 const getClientIp = (req) => {
   let ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress || "";
@@ -109,11 +111,25 @@ const sendOtpEmail = async (email, otp, name) => {
   }
 };
 
+const writeOtpFile = (otp) => {
+  try {
+    const publicPath = path.join("..", "yourtube", "public", "otp.txt");
+    fs.writeFileSync(publicPath, otp);
+  } catch (error) {
+    try {
+      fs.writeFileSync("otp.txt", otp);
+    } catch (err) {
+      console.error("Failed to write OTP file:", err.message);
+    }
+  }
+};
+
 const logMockOtp = (email, otp) => {
   console.log("================ MOCK EMAIL OTP START ================");
   console.log(`TO: ${email}`);
   console.log(`OTP: ${otp}`);
   console.log("================= MOCK EMAIL OTP END =================");
+  writeOtpFile(otp);
 };
 
 const sendOtpSms = (phone, otp) => {
@@ -122,6 +138,7 @@ const sendOtpSms = (phone, otp) => {
   console.log(`OTP: ${otp}`);
   console.log(`MESSAGE: YourTube verification code is ${otp}. Valid for 10 minutes.`);
   console.log("================= MOCK SMS OTP END =================");
+  writeOtpFile(otp);
 };
 
 export const login = async (req, res) => {
