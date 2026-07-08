@@ -24,6 +24,11 @@ export const UserProvider = ({ children }) => {
   const login = (userdata) => {
     setUser(userdata);
     localStorage.setItem("user", JSON.stringify(userdata));
+    if (typeof window !== "undefined") {
+      setTimeout(() => {
+        window.location.reload();
+      }, 100);
+    }
   };
 
   const logout = async () => {
@@ -33,6 +38,9 @@ export const UserProvider = ({ children }) => {
       await signOut(auth);
     } catch (error) {
       console.error("Error during sign out:", error);
+    }
+    if (typeof window !== "undefined") {
+      window.location.reload();
     }
   };
 
