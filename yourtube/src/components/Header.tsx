@@ -17,7 +17,7 @@ import { useUser } from "@/lib/AuthContext";
 import { useRazorpayUpgrade } from "@/lib/useRazorpay";
 
 const Header = () => {
-  const { user, logout, handlegooglesignin, upgradeUserLocally } = useUser();
+  const { user, logout, handlegooglesignin, handleDemoSignin, upgradeUserLocally } = useUser();
   const { triggerUpgrade } = useRazorpayUpgrade(user, upgradeUserLocally);
   // const user: any = {
   //   id: "1",
@@ -162,7 +162,7 @@ const Header = () => {
             </DropdownMenu>
           </>
         ) : (
-          <>
+          <div className="flex gap-2">
             <Button
               className="flex items-center gap-2"
               onClick={handlegooglesignin}
@@ -170,7 +170,14 @@ const Header = () => {
               <User className="w-4 h-4" />
               Sign in
             </Button>
-          </>
+            <Button
+              variant="outline"
+              className="flex items-center gap-1 border-slate-300 dark:border-slate-800 text-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+              onClick={handleDemoSignin}
+            >
+              Demo Login
+            </Button>
+          </div>
         )}{" "}
       </div>
       <Channeldialogue

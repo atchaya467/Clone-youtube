@@ -103,6 +103,44 @@ export const UserProvider = ({ children }) => {
     }
   };
 
+  const handleDemoSignin = async () => {
+    setErrorMsg("");
+    let overrideState = "";
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      overrideState = params.get("overrideState") || "";
+    }
+
+    try {
+      const payload = {
+        email: "atchaya@example.com",
+        name: "Atchaya",
+        image: "https://github.com/shadcn.png",
+        overrideState,
+      };
+
+      const response = await axiosInstance.post("/user/login", payload);
+      const data = response.data;
+
+      if (data.requireOtp) {
+        setTempUserId(data.tempUserId);
+        setOtpSentTo(data.otpSentTo);
+        setOtpChannelDetail(data.otpSentTo === "email" ? data.email : data.phone);
+        setRequirePhoneReg(false);
+        setShowOtpModal(true);
+      } else if (data.requirePhoneRegistration) {
+        setTempUserId(data.tempUserId);
+        setRequirePhoneReg(true);
+        setShowOtpModal(true);
+      } else {
+        login(data.result);
+      }
+    } catch (fallbackError) {
+      console.error("Demo login failed:", fallbackError);
+      setErrorMsg("Sign In failed. Please check your backend connection.");
+    }
+  };
+
   const handleRegisterPhone = async (e) => {
     e.preventDefault();
     setErrorMsg("");
@@ -218,7 +256,7 @@ export const UserProvider = ({ children }) => {
   }, []);
 
   return (
-    <UserContext.Provider value={{ user, login, logout, handlegooglesignin, upgradeUserLocally }}>
+    <UserContext.Provider value={{ user, login, logout, handlegooglesignin, handleDemoSignin, upgradeUserLocally }}>
       {children}
       {showOtpModal && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/60 backdrop-blur-sm p-4">
