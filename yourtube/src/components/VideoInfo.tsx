@@ -205,17 +205,17 @@ const VideoInfo = ({ video }: any) => {
             <AvatarFallback>{video.videochanel[0]}</AvatarFallback>
           </Avatar>
           <div>
-            <h3 className="font-medium">{video.videochanel}</h3>
-            <p className="text-sm text-gray-600">1.2M subscribers</p>
+            <h3 className="font-medium text-slate-900 dark:text-white">{video.videochanel}</h3>
+            <p className="text-sm text-gray-650 dark:text-gray-400">1.2M subscribers</p>
           </div>
           <Button className="ml-4">Subscribe</Button>
         </div>
         <div className="flex items-center gap-2">
-          <div className="flex items-center bg-gray-100 rounded-full">
+          <div className="flex items-center bg-gray-100 dark:bg-slate-800 rounded-full">
             <Button
               variant="ghost"
               size="sm"
-              className="rounded-l-full"
+              className="rounded-l-full text-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
               onClick={handleLike}
             >
               <ThumbsUp
@@ -229,7 +229,7 @@ const VideoInfo = ({ video }: any) => {
             <Button
               variant="ghost"
               size="sm"
-              className="rounded-r-full"
+              className="rounded-r-full text-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
               onClick={handleDislike}
             >
               <ThumbsDown
@@ -243,8 +243,8 @@ const VideoInfo = ({ video }: any) => {
           <Button
             variant="ghost"
             size="sm"
-            className={`bg-gray-100 rounded-full ${
-              isWatchLater ? "text-primary" : ""
+            className={`bg-gray-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-full ${
+              isWatchLater ? "text-primary dark:text-orange-500" : ""
             }`}
             onClick={handleWatchLater}
           >
@@ -254,7 +254,7 @@ const VideoInfo = ({ video }: any) => {
           <Button
             variant="ghost"
             size="sm"
-            className="bg-gray-100 rounded-full"
+            className="bg-gray-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-full"
           >
             <Share className="w-5 h-5 mr-2" />
             Share
@@ -262,7 +262,7 @@ const VideoInfo = ({ video }: any) => {
           <Button
             variant="ghost"
             size="sm"
-            className="bg-gray-100 rounded-full"
+            className="bg-gray-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-full"
             onClick={handleDownload}
           >
             <Download className="w-5 h-5 mr-2" />
@@ -271,18 +271,18 @@ const VideoInfo = ({ video }: any) => {
           <Button
             variant="ghost"
             size="icon"
-            className="bg-gray-100 rounded-full"
+            className="bg-gray-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-full"
           >
             <MoreHorizontal className="w-5 h-5" />
           </Button>
         </div>
       </div>
-      <div className="bg-gray-100 rounded-lg p-4">
-        <div className="flex gap-4 text-sm font-medium mb-2">
+      <div className="bg-gray-100 dark:bg-slate-800 rounded-lg p-4 text-slate-800 dark:text-slate-100 transition-colors duration-200">
+        <div className="flex gap-4 text-sm font-medium mb-2 text-slate-900 dark:text-slate-200">
           <span>{video.views.toLocaleString()} views</span>
           <span>{formatDistanceToNow(new Date(video.createdAt))} ago</span>
         </div>
-        <div className={`text-sm ${showFullDescription ? "" : "line-clamp-3"}`}>
+        <div className={`text-sm text-slate-700 dark:text-slate-300 ${showFullDescription ? "" : "line-clamp-3"}`}>
           <p>
             Sample video description. This would contain the actual video
             description from the database.
@@ -291,7 +291,7 @@ const VideoInfo = ({ video }: any) => {
         <Button
           variant="ghost"
           size="sm"
-          className="mt-2 p-0 h-auto font-medium"
+          className="mt-2 p-0 h-auto font-medium text-slate-800 dark:text-slate-200 dark:hover:text-white"
           onClick={() => setShowFullDescription(!showFullDescription)}
         >
           {showFullDescription ? "Show less" : "Show more"}

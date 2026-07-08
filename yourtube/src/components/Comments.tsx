@@ -330,13 +330,13 @@ const Comments = ({ videoId }: any) => {
                       if (e.key === "Enter") setIsEditingLocation(false);
                     }}
                     placeholder="City name"
-                    className="px-2 py-0.5 text-xs border border-gray-300 rounded focus:outline-none focus:border-black bg-white w-28"
+                    className="px-2 py-0.5 text-xs border border-gray-300 dark:border-slate-700 rounded focus:outline-none focus:border-black dark:focus:border-white bg-white dark:bg-slate-900 text-slate-900 dark:text-white w-28"
                     autoFocus
                   />
                 ) : (
                   <span
                     onClick={() => setIsEditingLocation(true)}
-                    className="cursor-pointer hover:underline text-gray-700 bg-gray-100 px-2 py-0.5 rounded-full font-medium"
+                    className="cursor-pointer hover:underline text-gray-700 dark:text-slate-300 bg-gray-100 dark:bg-slate-800 px-2 py-0.5 rounded-full font-medium"
                     title="Click to edit location"
                   >
                     {userCity || "Unknown Location"} (edit)
