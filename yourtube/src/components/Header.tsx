@@ -83,10 +83,10 @@ const Header = () => {
         {user ? (
           <>
             {user.isPremium && (
-              <span className="flex items-center gap-1 text-[11px] font-bold bg-amber-100 text-amber-700 px-2 py-1 rounded-full border border-amber-300">
+              <Link href="/upgrade" className="flex items-center gap-1 text-[11px] font-bold bg-amber-100 hover:bg-amber-200 text-amber-700 px-2 py-1 rounded-full border border-amber-300 transition-all duration-200">
                 <Crown className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
-                PREMIUM
-              </span>
+                {(user.plan || "PREMIUM").toUpperCase()}
+              </Link>
             )}
             <Button variant="ghost" size="icon">
               <VideoIcon className="w-6 h-6" />
@@ -108,20 +108,26 @@ const Header = () => {
               </DropdownMenuTrigger>
               <DropdownMenuContent className="w-56" align="end" forceMount>
                 {user?.isPremium ? (
-                  <div className="px-2 py-1.5 text-xs text-amber-600 font-bold flex items-center gap-1">
-                    <Crown className="w-4 h-4 fill-amber-500 text-amber-500" />
-                    Premium Member
+                  <div className="px-2 py-1.5 text-xs text-amber-600 font-bold flex flex-col gap-1">
+                    <div className="flex items-center gap-1">
+                      <Crown className="w-4 h-4 fill-amber-500 text-amber-500" />
+                      {user?.plan || "Premium"} Member
+                    </div>
+                    <Link href="/upgrade" className="text-[10px] text-blue-600 hover:underline">
+                      Manage Plan
+                    </Link>
                   </div>
                 ) : (
                   <div className="px-2 py-1">
-                    <Button
-                      variant="default"
-                      size="sm"
-                      className="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs"
-                      onClick={triggerUpgrade}
-                    >
-                      👑 Get Premium (₹199)
-                    </Button>
+                    <Link href="/upgrade" passHref legacyBehavior>
+                      <Button
+                        variant="default"
+                        size="sm"
+                        className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-bold text-xs"
+                      >
+                        👑 Upgrade Plan
+                      </Button>
+                    </Link>
                   </div>
                 )}
                 <DropdownMenuSeparator />
