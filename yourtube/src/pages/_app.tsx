@@ -14,9 +14,21 @@ export default function App({ Component, pageProps }: AppProps) {
     const applyLocationTheme = async () => {
       try {
         let overrideState = "";
+        let forceTheme = "";
         if (typeof window !== "undefined") {
           const params = new URLSearchParams(window.location.search);
           overrideState = params.get("overrideState") || "";
+          forceTheme = params.get("theme") || "";
+        }
+
+        if (forceTheme === "light") {
+          setTheme("light");
+          document.documentElement.classList.remove("dark");
+          return;
+        } else if (forceTheme === "dark") {
+          setTheme("dark");
+          document.documentElement.classList.add("dark");
+          return;
         }
 
         const res = await axiosInstance.get(`/location${overrideState ? `?overrideState=${overrideState}` : ""}`);
