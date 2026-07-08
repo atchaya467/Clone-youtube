@@ -34,7 +34,12 @@ app.use(
 );
 app.use(express.json({ limit: "30mb", extended: true }));
 app.use(express.urlencoded({ limit: "30mb", extended: true }));
-app.use("/uploads", express.static(path.join("uploads")));
+import fs from "fs";
+const uploadsDir = path.join("uploads");
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir);
+}
+app.use("/uploads", express.static(uploadsDir));
 let lastDbError = null;
 
 app.get("/", (req, res) => {
