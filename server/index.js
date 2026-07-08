@@ -68,7 +68,7 @@ app.get("/location", async (req, res) => {
   }
 
   // Developer testing override
-  const overrideState = req.query.overrideState || req.body.overrideState;
+  const overrideState = (req.query && req.query.overrideState) || (req.body && req.body.overrideState);
   if (overrideState) {
     return res.status(200).json({ city: "Override City", state: overrideState });
   }
