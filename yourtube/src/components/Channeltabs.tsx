@@ -18,7 +18,7 @@ const Channeltabs = () => {
             key={tab.id}
             variant="ghost"
             className={`px-0 py-4 border-b-2 rounded-none ${
-              activeTab === tab.id ? "border-black text-black" : "border-transparent text-gray-600 hover:text-black"
+              activeTab === tab.id ? "border-black text-black dark:border-white dark:text-white" : "border-transparent text-gray-600 hover:text-black dark:hover:text-white dark:text-gray-400"
             }`}
             onClick={() => setActiveTab(tab.id)}
           >

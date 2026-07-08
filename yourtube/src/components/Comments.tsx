@@ -463,7 +463,7 @@ const Comments = ({ videoId }: any) => {
                       {/* Like Button */}
                       <button
                         onClick={() => handleLikeComment(comment._id)}
-                        className={`flex items-center gap-1 hover:text-black transition-colors ${
+                        className={`flex items-center gap-1 hover:text-black dark:hover:text-white transition-colors ${
                           comment.likes?.includes(user?._id)
                             ? "text-blue-600 font-bold"
                             : ""
@@ -482,7 +482,7 @@ const Comments = ({ videoId }: any) => {
                       {/* Dislike Button */}
                       <button
                         onClick={() => handleDislikeComment(comment._id)}
-                        className={`flex items-center gap-1 hover:text-black transition-colors ${
+                        className={`flex items-center gap-1 hover:text-black dark:hover:text-white transition-colors ${
                           comment.dislikes?.includes(user?._id)
                             ? "text-red-600 font-bold"
                             : ""
@@ -565,7 +565,7 @@ const Comments = ({ videoId }: any) => {
                         <div className="flex gap-2 border-l pl-3 border-gray-200">
                           <button
                             onClick={() => handleEdit(comment)}
-                            className="hover:text-black"
+                            className="hover:text-black dark:hover:text-white text-gray-500 dark:text-gray-400"
                           >
                             Edit
                           </button>

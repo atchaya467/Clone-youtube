@@ -220,12 +220,12 @@ const VideoInfo = ({ video }: any) => {
             >
               <ThumbsUp
                 className={`w-5 h-5 mr-2 ${
-                  isLiked ? "fill-black text-black" : ""
+                  isLiked ? "fill-black text-black dark:fill-white dark:text-white" : ""
                 }`}
               />
               {likes.toLocaleString()}
             </Button>
-            <div className="w-px h-6 bg-gray-300" />
+            <div className="w-px h-6 bg-gray-300 dark:bg-slate-700" />
             <Button
               variant="ghost"
               size="sm"
@@ -234,7 +234,7 @@ const VideoInfo = ({ video }: any) => {
             >
               <ThumbsDown
                 className={`w-5 h-5 mr-2 ${
-                  isDisliked ? "fill-black text-black" : ""
+                  isDisliked ? "fill-black text-black dark:fill-white dark:text-white" : ""
                 }`}
               />
               {dislikes.toLocaleString()}
