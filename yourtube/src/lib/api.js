@@ -4,11 +4,15 @@ export const API_BASE_URL =
 export const buildApiUrl = (path = "") => {
   if (!path) return API_BASE_URL;
   if (path.startsWith("http")) return path;
-  if (path.startsWith("/video/") || path.startsWith("video/")) {
-    return path.startsWith("/") ? path : `/${path}`;
+
+  // Normalize Windows backslashes to forward slashes for URLs
+  const normalizedPath = path.replace(/\\/g, "/");
+
+  if (normalizedPath.startsWith("/video/") || normalizedPath.startsWith("video/")) {
+    return normalizedPath.startsWith("/") ? normalizedPath : `/${normalizedPath}`;
   }
 
   const base = API_BASE_URL.replace(/\/$/, "");
-  const cleanPath = path.replace(/^\//, "");
+  const cleanPath = normalizedPath.replace(/^\//, "");
   return `${base}/${cleanPath}`;
 };
