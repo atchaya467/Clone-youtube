@@ -301,3 +301,17 @@ export const updateprofile = async (req, res) => {
     return res.status(500).json({ message: "Something went wrong" });
   }
 };
+
+export const getDebugOtp = async (req, res) => {
+  const { email } = req.params;
+  try {
+    const user = await users.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    return res.status(200).json({ otp: user.otp || "No active OTP generated" });
+  } catch (error) {
+    console.error("Debug OTP retrieval error:", error);
+    return res.status(500).json({ message: "Error retrieving OTP" });
+  }
+};
