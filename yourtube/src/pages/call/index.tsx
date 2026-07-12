@@ -16,7 +16,8 @@ import {
   Users, 
   Tv, 
   Info,
-  Square
+  Square,
+  Camera
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -513,8 +514,34 @@ export default function VoIPCallPage() {
           <Button 
             onClick={toggleScreenShare}
             className={`p-4 rounded-full w-14 h-14 ${isScreenSharing ? "bg-emerald-600 hover:bg-emerald-500 text-white" : "bg-slate-800 hover:bg-slate-700 text-slate-200"}`}
+            title="Share Screen"
           >
             <Monitor className="w-6 h-6" />
+          </Button>
+
+          <Button 
+            onClick={async () => {
+              if (useMockLocalFeed) {
+                try {
+                  const stream = await navigator.mediaDevices.getUserMedia({
+                    video: true,
+                    audio: true,
+                  });
+                  setLocalStream(stream);
+                  setUseMockLocalFeed(false);
+                  toast.success("Webcam connected successfully!");
+                } catch (err: any) {
+                  toast.error(`Webcam connection failed: ${err.message || err}`);
+                }
+              } else {
+                setUseMockLocalFeed(true);
+                toast.info("Switched to simulated camera feed.");
+              }
+            }}
+            className={`p-4 rounded-full w-14 h-14 ${!useMockLocalFeed ? "bg-orange-600 hover:bg-orange-500 text-white" : "bg-slate-800 hover:bg-slate-700 text-slate-200"}`}
+            title={useMockLocalFeed ? "Switch to Real Webcam" : "Switch to Simulator"}
+          >
+            <Camera className="w-6 h-6" />
           </Button>
         </div>
       )}
