@@ -1,6 +1,6 @@
 import Link from "next/link";
-import Image from "next/image";
 import { formatDistanceToNow } from "date-fns";
+import { buildApiUrl } from "@/lib/api";
 
 interface RelatedVideosProps {
   videos: Array<{
@@ -9,9 +9,11 @@ interface RelatedVideosProps {
     videochanel: string;
     views: number;
     createdAt: string;
+    filepath?: string;
+    thumbnailpath?: string;
   }>;
 }
-const vid = "/video/vdo.mp4";
+
 export default function RelatedVideos({ videos }: RelatedVideosProps) {
   return (
     <div className="space-y-2">
@@ -22,10 +24,18 @@ export default function RelatedVideos({ videos }: RelatedVideosProps) {
           className="flex gap-2 group"
         >
           <div className="relative w-40 aspect-video bg-gray-100 rounded overflow-hidden flex-shrink-0">
-            <video
-              src={vid}
-              className="object-cover group-hover:scale-105 transition-transform duration-200"
-            />
+            {video.thumbnailpath ? (
+              <img
+                src={buildApiUrl(video.thumbnailpath)}
+                alt={video.videotitle}
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+              />
+            ) : (
+              <video
+                src={buildApiUrl(video.filepath || "/video/vdo.mp4")}
+                className="object-cover group-hover:scale-105 transition-transform duration-200"
+              />
+            )}
           </div>
           <div className="flex-1 min-w-0">
             <h3 className="font-medium text-sm line-clamp-2 group-hover:text-blue-600">
