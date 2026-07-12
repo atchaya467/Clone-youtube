@@ -33,6 +33,7 @@ export default function VoIPCallPage() {
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
+  const [useMockLocalFeed, setUseMockLocalFeed] = useState(false);
 
   // Streams
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
@@ -67,9 +68,11 @@ export default function VoIPCallPage() {
         audio: true,
       });
       setLocalStream(stream);
+      setUseMockLocalFeed(false);
     } catch (err) {
       console.error("Error accessing camera/microphone:", err);
-      toast.error("Camera and microphone permission denied. Please allow device access.");
+      setUseMockLocalFeed(true);
+      toast.warning("Camera permission blocked or unavailable. Running in Call Simulation mode.");
     }
   };
 
@@ -146,6 +149,20 @@ export default function VoIPCallPage() {
     if (localStream) {
       localStream.getTracks().forEach((t) => tracksToRecord.push(t));
     }
+    
+    // Fallback: if camera is blocked/mock mode, capture stream from the remote video element
+    if (tracksToRecord.length === 0 && remoteVideoRef.current) {
+      try {
+        const remoteEl = remoteVideoRef.current as any;
+        const captureStream = remoteEl.captureStream?.() || remoteEl.mozCaptureStream?.();
+        if (captureStream) {
+          captureStream.getTracks().forEach((t: any) => tracksToRecord.push(t));
+        }
+      } catch (err) {
+        console.error("Error capturing remote stream fallback:", err);
+      }
+    }
+
     if (screenStream) {
       screenStream.getVideoTracks().forEach((t) => tracksToRecord.push(t));
     }
@@ -391,6 +408,15 @@ export default function VoIPCallPage() {
                 <VideoOff className="w-12 h-12" />
                 <span className="text-xs font-semibold">Your Camera is Off</span>
               </div>
+            ) : useMockLocalFeed ? (
+              <video 
+                src="/video/vdo.mp4"
+                autoPlay 
+                playsInline 
+                loop
+                muted 
+                className="w-full h-full object-cover mirror"
+              />
             ) : (
               <video 
                 ref={setLocalVideoRef} 
