@@ -66,6 +66,17 @@ const index = () => {
     fetchvideo();
   }, [id]);
 
+  const handleNextVideo = () => {
+    if (!video || !videos) return;
+    const currentIndex = video.findIndex((v: any) => v._id === videos._id);
+    if (currentIndex === -1) return;
+    const nextIndex = (currentIndex + 1) % video.length;
+    const nextVid = video[nextIndex];
+    if (nextVid) {
+      router.push(`/watch/${nextVid._id}`);
+    }
+  };
+
   if (loading) {
     return <div>Loading..</div>;
   }
@@ -79,7 +90,7 @@ const index = () => {
       <div className="max-w-7xl mx-auto p-4">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-4">
-            <Videopplayer video={videos} />
+            <Videopplayer video={videos} onNextVideo={handleNextVideo} />
             <VideoInfo video={videos} />
             <Comments videoId={id} />
           </div>
