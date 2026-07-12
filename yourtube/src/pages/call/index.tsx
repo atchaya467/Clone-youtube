@@ -39,9 +39,20 @@ export default function VoIPCallPage() {
   const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
   
   // Refs
-  const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
-  const screenVideoRef = useRef<HTMLVideoElement>(null);
+  
+  // Callback Refs to guarantee immediate srcObject binding
+  const setLocalVideoRef = (el: HTMLVideoElement | null) => {
+    if (el && localStream) {
+      el.srcObject = localStream;
+    }
+  };
+
+  const setScreenVideoRef = (el: HTMLVideoElement | null) => {
+    if (el && screenStream) {
+      el.srcObject = screenStream;
+    }
+  };
   
   // Recording
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -56,9 +67,6 @@ export default function VoIPCallPage() {
         audio: true,
       });
       setLocalStream(stream);
-      if (localVideoRef.current) {
-        localVideoRef.current.srcObject = stream;
-      }
     } catch (err) {
       console.error("Error accessing camera/microphone:", err);
       toast.error("Camera and microphone permission denied. Please allow device access.");
@@ -75,12 +83,7 @@ export default function VoIPCallPage() {
     };
   }, []);
 
-  // Update local video element when stream is active
-  useEffect(() => {
-    if (localVideoRef.current && localStream) {
-      localVideoRef.current.srcObject = localStream;
-    }
-  }, [localStream, isVideoOff]);
+  // Stream update bindings are handled directly by callback refs
 
   // Initiate call
   const startCall = async () => {
@@ -132,12 +135,7 @@ export default function VoIPCallPage() {
     }
   };
 
-  // Bind screen stream to video tag
-  useEffect(() => {
-    if (screenVideoRef.current && screenStream) {
-      screenVideoRef.current.srcObject = screenStream;
-    }
-  }, [screenStream, isScreenSharing]);
+  // Screen share update bindings are handled directly by callback refs
 
   // Start Call Recording
   const startRecording = () => {
@@ -395,7 +393,7 @@ export default function VoIPCallPage() {
               </div>
             ) : (
               <video 
-                ref={localVideoRef} 
+                ref={setLocalVideoRef} 
                 autoPlay 
                 playsInline 
                 muted 
@@ -436,7 +434,7 @@ export default function VoIPCallPage() {
           {isScreenSharing && (
             <div className="md:col-span-2 bg-slate-950 rounded-2xl overflow-hidden border border-slate-800 relative aspect-video flex items-center justify-center">
               <video 
-                ref={screenVideoRef} 
+                ref={setScreenVideoRef} 
                 autoPlay 
                 playsInline 
                 className="w-full h-full object-contain"
