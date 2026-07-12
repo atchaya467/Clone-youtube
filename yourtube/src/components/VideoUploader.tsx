@@ -84,23 +84,23 @@ const VideoUploader = ({ channelId, channelName, onUploadSuccess }: any) => {
     }
   };
   return (
-    <div className="bg-gray-50 rounded-lg p-6">
-      <h2 className="text-xl font-semibold mb-4">Upload a video</h2>
+    <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded-lg p-6">
+      <h2 className="text-xl font-semibold mb-4 text-slate-900 dark:text-white">Upload a video</h2>
 
       <div className="space-y-4">
         {!videoFile ? (
           <div
-            className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer hover:bg-gray-100 transition-colors"
+            className="border-2 border-dashed border-slate-350 dark:border-slate-700 rounded-lg p-8 text-center cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
             onClick={() => fileInputRef.current?.click()}
           >
-            <Upload className="w-12 h-12 mx-auto text-gray-400 mb-2" />
-            <p className="text-lg font-medium">
+            <Upload className="w-12 h-12 mx-auto text-slate-400 dark:text-slate-500 mb-2" />
+            <p className="text-lg font-medium text-slate-800 dark:text-slate-200">
               Drag and drop video files to upload
             </p>
-            <p className="text-sm text-gray-500 mt-1">
+            <p className="text-sm text-slate-550 dark:text-slate-400 mt-1">
               or click to select files
             </p>
-            <p className="text-xs text-gray-400 mt-4">
+            <p className="text-xs text-slate-450 dark:text-slate-500 mt-4">
               MP4, WebM, MOV or AVI • Up to 100MB
             </p>
             <input
@@ -113,13 +113,13 @@ const VideoUploader = ({ channelId, channelName, onUploadSuccess }: any) => {
           </div>
         ) : (
           <div className="space-y-4">
-            <div className="flex items-center gap-3 p-3 bg-white rounded-lg border">
-              <div className="bg-blue-100 p-2 rounded-md">
-                <FileVideo className="w-6 h-6 text-blue-600" />
+            <div className="flex items-center gap-3 p-3 bg-white dark:bg-slate-950 rounded-lg border border-slate-200 dark:border-slate-800">
+              <div className="bg-blue-100 dark:bg-blue-950/40 p-2 rounded-md">
+                <FileVideo className="w-6 h-6 text-blue-600 dark:text-blue-400" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="font-medium truncate">{videoFile.name}</p>
-                <p className="text-sm text-gray-500">
+                <p className="font-medium truncate text-slate-900 dark:text-white">{videoFile.name}</p>
+                <p className="text-sm text-slate-500 dark:text-slate-400">
                   {(videoFile.size / (1024 * 1024)).toFixed(2)} MB
                 </p>
               </div>
@@ -137,14 +137,14 @@ const VideoUploader = ({ channelId, channelName, onUploadSuccess }: any) => {
 
             <div className="space-y-3">
               <div>
-                <Label htmlFor="title">Title (required)</Label>
+                 <Label htmlFor="title" className="text-slate-800 dark:text-slate-200 font-semibold text-sm">Title (required)</Label>
                 <Input
                   id="title"
                   value={videoTitle}
                   onChange={(e) => setVideoTitle(e.target.value)}
                   placeholder="Add a title that describes your video"
                   disabled={isUploading || uploadComplete}
-                  className="mt-1"
+                  className="mt-1 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-650"
                 />
               </div>
             </div>
