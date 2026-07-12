@@ -78,7 +78,7 @@ export default function VideoPlayer({ video }: VideoPlayerProps) {
       <video
         key={video?._id}
         ref={videoRef}
-        className="w-full h-full"
+        className="w-full h-full object-cover"
         controls={!limitExceeded}
         onTimeUpdate={handleTimeUpdate}
         onPlay={handlePlay}
