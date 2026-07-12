@@ -133,9 +133,12 @@ export default function UpgradePage() {
       } else {
         setPaymentStep("error");
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      const msg = err.response?.data?.message || err.message || "Network error. Please try again.";
+      setProcessingStatus(`Error: ${msg}`);
       setPaymentStep("error");
+      toast.error(`Payment Failed: ${msg}`);
     }
   };
 

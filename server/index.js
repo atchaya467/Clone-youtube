@@ -17,7 +17,8 @@ import path from "path";
 const allowedOrigins = [
   "http://localhost:3000",
   "https://clone-youtube-lrby.vercel.app",
-  /https:\/\/clone-youtube-.*\.vercel\.app$/,
+  "https://clone-youtube-one-lilac.vercel.app",
+  /https:\/\/.*\.vercel\.app$/,
 ];
 app.use(
   cors({
