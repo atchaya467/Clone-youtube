@@ -11,6 +11,7 @@ const VideoUploader = ({ channelId, channelName, onUploadSuccess }: any) => {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
   const [videoTitle, setVideoTitle] = useState("");
   const [uploadComplete, setUploadComplete] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -35,6 +36,7 @@ const VideoUploader = ({ channelId, channelName, onUploadSuccess }: any) => {
   };
   const resetForm = () => {
     setVideoFile(null);
+    setThumbnailFile(null);
     setVideoTitle("");
     setIsUploading(false);
     setUploadProgress(0);
@@ -58,6 +60,9 @@ const VideoUploader = ({ channelId, channelName, onUploadSuccess }: any) => {
     formdata.append("videotitle", videoTitle);
     formdata.append("videochanel", channelName);
     formdata.append("uploader", channelId);
+    if (thumbnailFile) {
+      formdata.append("thumbnail", thumbnailFile);
+    }
     console.log(formdata)
     try {
       setIsUploading(true);
@@ -145,6 +150,23 @@ const VideoUploader = ({ channelId, channelName, onUploadSuccess }: any) => {
                   placeholder="Add a title that describes your video"
                   disabled={isUploading || uploadComplete}
                   className="mt-1 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-650"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="thumbnail" className="text-slate-800 dark:text-slate-200 font-semibold text-sm">Thumbnail Image (optional)</Label>
+                <Input
+                  id="thumbnail"
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const files = e.target.files;
+                    if (files && files.length > 0) {
+                      setThumbnailFile(files[0]);
+                    }
+                  }}
+                  disabled={isUploading || uploadComplete}
+                  className="mt-1 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white file:text-slate-600 dark:file:text-slate-300"
                 />
               </div>
             </div>

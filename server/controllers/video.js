@@ -1,20 +1,24 @@
 import video from "../Modals/video.js";
 
 export const uploadvideo = async (req, res) => {
-  if (req.file === undefined) {
+  const videoFile = req.files?.["file"]?.[0] || req.file;
+  const thumbnailFile = req.files?.["thumbnail"]?.[0];
+
+  if (!videoFile) {
     return res
-      .status(404)
+      .status(400)
       .json({ message: "plz upload a mp4 video file only" });
   } else {
     try {
       const file = new video({
         videotitle: req.body.videotitle,
-        filename: req.file.originalname,
-        filepath: req.file.path,
-        filetype: req.file.mimetype,
-        filesize: req.file.size,
+        filename: videoFile.originalname,
+        filepath: videoFile.path,
+        filetype: videoFile.mimetype,
+        filesize: videoFile.size,
         videochanel: req.body.videochanel,
         uploader: req.body.uploader,
+        thumbnailpath: thumbnailFile ? thumbnailFile.path : "",
       });
       await file.save();
       return res.status(201).json("file uploaded successfully");
