@@ -79,13 +79,15 @@ export default function App({ Component, pageProps }: AppProps) {
 
   return (
     <UserProvider>
-      <div className="min-h-screen bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-200">
+      <div className="min-h-screen bg-white dark:bg-slate-955 text-slate-900 dark:text-slate-100 transition-colors duration-200 flex flex-col w-full">
         <title>Your-Tube Clone</title>
         <Header />
         <Toaster />
-        <div className="flex">
+        <div className="flex flex-1 w-full">
           <Sidebar />
-          <Component {...pageProps} />
+          <main className="flex-grow flex-1 min-w-0 w-full">
+            <Component {...pageProps} />
+          </main>
         </div>
       </div>
     </UserProvider>
