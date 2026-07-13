@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useUser } from "@/lib/AuthContext";
 import axiosInstance from "@/lib/axiosinstance";
+import { API_BASE_URL } from "@/lib/api";
 import { 
   Video, 
   VideoOff, 
@@ -45,6 +46,7 @@ export default function VoIPCallPage() {
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
+  const [isRemoteScreenSharing, setIsRemoteScreenSharing] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [useMockLocalFeed, setUseMockLocalFeed] = useState(false);
@@ -116,6 +118,31 @@ export default function VoIPCallPage() {
     }
   };
 
+  // Update outgoing video track inside the WebRTC transceiver peer connection
+  const updateOutgoingVideoTrack = async (newTrack: MediaStreamTrack | null) => {
+    if (!peerConnectionRef.current) return;
+    try {
+      const pc = peerConnectionRef.current;
+      const transceivers = pc.getTransceivers();
+      const videoTransceiver = transceivers.find(
+        (t) => t.receiver.track.kind === "video" || (t.sender.track && t.sender.track.kind === "video")
+      );
+      if (videoTransceiver) {
+        if (newTrack) {
+          videoTransceiver.direction = "sendrecv";
+          await videoTransceiver.sender.replaceTrack(newTrack);
+        } else {
+          videoTransceiver.direction = "recvonly";
+          await videoTransceiver.sender.replaceTrack(null);
+        }
+      } else if (newTrack) {
+        pc.addTrack(newTrack);
+      }
+    } catch (err) {
+      console.warn("Failed to update outgoing video track in WebRTC:", err);
+    }
+  };
+
   // Ringtone generator during outgoing call
   const startRingtone = () => {
     stopRingtone();
@@ -173,6 +200,40 @@ export default function VoIPCallPage() {
       }
     };
   }, []);
+
+  // Synchronous leave signal on page unload/close
+  useEffect(() => {
+    const handleUnload = () => {
+      if (callState === "connected" || callState === "calling") {
+        const url = `${API_BASE_URL.replace(/\/$/, "")}/signal/post`;
+        const body = JSON.stringify({
+          roomName,
+          type: "leave",
+          sender: localSenderId.current,
+          data: { name: user?.name || "Friend" }
+        });
+        
+        if (navigator.sendBeacon) {
+          const blob = new Blob([body], { type: "application/json" });
+          navigator.sendBeacon(url, blob);
+        } else {
+          fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body,
+            keepalive: true
+          });
+        }
+      }
+    };
+
+    window.addEventListener("beforeunload", handleUnload);
+    window.addEventListener("pagehide", handleUnload);
+    return () => {
+      window.removeEventListener("beforeunload", handleUnload);
+      window.removeEventListener("pagehide", handleUnload);
+    };
+  }, [callState, roomName, user]);
 
   // Callback Refs to guarantee immediate srcObject binding
   const setLocalVideoRef = (el: HTMLVideoElement | null) => {
@@ -404,6 +465,12 @@ export default function VoIPCallPage() {
           data: answer,
         });
         toast.success("Joined call room. Establishing connection...");
+
+        // Parse any existing screenshare signal in the room
+        const screenshareSignal = activeSignals.filter((s: any) => s.type === "screenshare").pop();
+        if (screenshareSignal) {
+          setIsRemoteScreenSharing(!!screenshareSignal.data?.active);
+        }
       }
 
       // 3. Start database signaling polling loops tracking applied signal IDs
@@ -429,6 +496,8 @@ export default function VoIPCallPage() {
               } catch (e) {
                 console.warn("Failed to add ICE candidate:", e);
               }
+            } else if (sig.type === "screenshare") {
+              setIsRemoteScreenSharing(!!sig.data?.active);
             } else if (sig.type === "leave") {
               const leavingName = sig.data?.name || friendName;
               toast.error(`${leavingName} has left the meeting.`);
@@ -498,25 +567,23 @@ export default function VoIPCallPage() {
       }
       setScreenStream(null);
       setIsScreenSharing(false);
-
-      // Restore local webcam track in the peer connection
-      if (peerConnectionRef.current) {
-        const transceivers = peerConnectionRef.current.getTransceivers();
-        const videoTransceiver = transceivers.find(t => t.receiver.track.kind === 'video');
-        if (videoTransceiver) {
-          if (localStream) {
-            const videoTrack = localStream.getVideoTracks()[0];
-            if (videoTrack) {
-              videoTransceiver.direction = "sendrecv";
-              videoTransceiver.sender.replaceTrack(videoTrack);
-            }
-          } else {
-            // No webcam track available, fall back to recvonly
-            videoTransceiver.direction = "recvonly";
-            videoTransceiver.sender.replaceTrack(null);
-          }
+      
+      // Restore webcam track in PeerConnection
+      if (localStream) {
+        const videoTrack = localStream.getVideoTracks()[0];
+        if (videoTrack) {
+          await updateOutgoingVideoTrack(videoTrack);
         }
       }
+
+      // Notify peer that screen sharing stopped
+      axiosInstance.post("/signal/post", {
+        roomName,
+        type: "screenshare",
+        sender: localSenderId.current,
+        data: { active: false },
+      }).catch(err => console.error("Error sending screenshare signal:", err));
+
       toast.info("Stopped screen sharing.");
     } else {
       try {
@@ -529,40 +596,37 @@ export default function VoIPCallPage() {
         setIsScreenSharing(true);
         toast.success("Screen sharing active!");
 
+        // Send screen share track to remote peer
         const screenTrack = stream.getVideoTracks()[0];
-        
-        // Swap outgoing video track to the screen share track
-        if (peerConnectionRef.current && screenTrack) {
-          const transceivers = peerConnectionRef.current.getTransceivers();
-          const videoTransceiver = transceivers.find(t => t.receiver.track.kind === 'video');
-          if (videoTransceiver) {
-            videoTransceiver.direction = "sendrecv";
-            videoTransceiver.sender.replaceTrack(screenTrack);
-          } else {
-            peerConnectionRef.current.addTrack(screenTrack, stream);
-          }
+        if (screenTrack) {
+          await updateOutgoingVideoTrack(screenTrack);
         }
 
-        screenTrack.onended = () => {
+        // Notify peer that screen sharing started
+        axiosInstance.post("/signal/post", {
+          roomName,
+          type: "screenshare",
+          sender: localSenderId.current,
+          data: { active: true },
+        }).catch(err => console.error("Error sending screenshare signal:", err));
+
+        stream.getVideoTracks()[0].onended = async () => {
           setScreenStream(null);
           setIsScreenSharing(false);
-          // Restore local webcam track when ended natively
-          if (peerConnectionRef.current) {
-            const transceivers = peerConnectionRef.current.getTransceivers();
-            const videoTransceiver = transceivers.find(t => t.receiver.track.kind === 'video');
-            if (videoTransceiver) {
-              if (localStream) {
-                const videoTrack = localStream.getVideoTracks()[0];
-                if (videoTrack) {
-                  videoTransceiver.direction = "sendrecv";
-                  videoTransceiver.sender.replaceTrack(videoTrack);
-                }
-              } else {
-                videoTransceiver.direction = "recvonly";
-                videoTransceiver.sender.replaceTrack(null);
-              }
+          // Restore webcam track
+          if (localStream) {
+            const videoTrack = localStream.getVideoTracks()[0];
+            if (videoTrack) {
+              await updateOutgoingVideoTrack(videoTrack);
             }
           }
+          // Notify peer that screen sharing stopped
+          axiosInstance.post("/signal/post", {
+            roomName,
+            type: "screenshare",
+            sender: localSenderId.current,
+            data: { active: false },
+          }).catch(err => console.error("Error sending screenshare signal:", err));
         };
       } catch (err) {
         console.error("Error starting display media:", err);
@@ -661,6 +725,7 @@ export default function VoIPCallPage() {
     }
     setScreenStream(null);
     setIsScreenSharing(false);
+    setIsRemoteScreenSharing(false);
     setCallState("ended");
     
     if (sendLeaveSignal) {
@@ -670,12 +735,12 @@ export default function VoIPCallPage() {
         type: "leave",
         sender: localSenderId.current,
         data: { name: user?.name || "Friend" }
-      }).then(() => {
-        // Clear room signals from database after a 3-second delay to allow the remote peer to poll it
-        setTimeout(() => {
-          axiosInstance.post("/signal/clear", { roomName }).catch(err => {});
-        }, 3000);
       }).catch(err => {});
+
+      // Clear room signals from database to clear peer state after a delay of 5 seconds
+      setTimeout(() => {
+        axiosInstance.post("/signal/clear", { roomName }).catch(err => {});
+      }, 5000);
     }
     
     // End chime (descending note sequence)
@@ -688,6 +753,7 @@ export default function VoIPCallPage() {
     setRoomName("");
     setFriendName("");
     setChatMessages([]);
+    setIsRemoteScreenSharing(false);
   };
 
   // Handle message send in chat
@@ -717,10 +783,32 @@ export default function VoIPCallPage() {
           }
         ]);
       }, 1500);
-    }
-  };
+      }
+    };
 
-  return (
+    const getMainStreamOwnerName = () => {
+      if (isScreenSharing && screenStream) {
+        return "You (Screen Shared)";
+      }
+      if (isRemoteScreenSharing) {
+        return `${friendName} (Screen Shared)`;
+      }
+      return isLocalVideoMain ? "You" : friendName;
+    };
+
+    const getMainStreamSubtitle = () => {
+      if (isScreenSharing && screenStream) {
+        return "Screen Share Feed";
+      }
+      if (isRemoteScreenSharing) {
+        return "Remote Screen Share Feed";
+      }
+      return !isLocalVideoMain 
+        ? (remoteStream ? "Live Webcam Feed" : "Simulated Feed") 
+        : (useMockLocalFeed ? "Simulated Local" : "Live Camera");
+    };
+  
+    return (
     <div className="h-screen w-full bg-slate-950 text-slate-100 flex flex-col justify-between overflow-hidden relative">
       
       {/* 1. MOCK INCOMING SETUP VIEW */}
@@ -855,7 +943,7 @@ export default function VoIPCallPage() {
                   ref={setRemoteVideoRef}
                   autoPlay
                   playsInline
-                  className="w-full h-full object-cover"
+                  className={`w-full h-full ${isRemoteScreenSharing ? "object-contain bg-black" : "object-cover"}`}
                 />
               ) : (
                 // Fallback simulation plays the peer video
@@ -870,24 +958,27 @@ export default function VoIPCallPage() {
                 />
               )}
             </div>
-
             {/* NAME TAG & MIC STATE OVERLAY (FOR MAIN VIDEO STREAM OWNER) */}
-            <div className="absolute bottom-6 left-6 z-10 flex items-center gap-3 bg-black/60 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-slate-850">
+            <div className="absolute bottom-6 left-6 z-10 flex items-center gap-3 bg-black/60 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-slate-855">
               <div className="relative">
                 {(!isLocalVideoMain ? isFriendSpeaking : isLocalSpeaking) && (
                   <span className="absolute -inset-1 rounded-full bg-emerald-500/40 animate-ping" />
                 )}
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black text-white ${(!isLocalVideoMain ? isFriendSpeaking : isLocalSpeaking) ? "bg-emerald-600" : "bg-blue-600"}`}>
-                  {(!isLocalVideoMain ? friendName : (user?.name || "You")).charAt(0).toUpperCase()}
+                  {(isScreenSharing && screenStream) || isRemoteScreenSharing ? (
+                    <Monitor className="w-4 h-4" />
+                  ) : (
+                    (!isLocalVideoMain ? friendName : (user?.name || "You")).charAt(0).toUpperCase()
+                  )}
                 </div>
               </div>
               <div>
                 <div className="text-xs font-bold text-white flex items-center gap-1.5">
-                  <span>{!isLocalVideoMain ? (isScreenSharing ? `${friendName} (Screen Shared)` : friendName) : "You"}</span>
+                  <span>{getMainStreamOwnerName()}</span>
                   {(!isLocalVideoMain ? isFriendSpeaking : isLocalSpeaking) && <Volume2 className="w-3.5 h-3.5 text-emerald-400 animate-bounce" />}
                 </div>
                 <span className="text-[10px] text-slate-400">
-                  {!isLocalVideoMain ? (remoteStream ? "Live Webcam Feed" : "Simulated Feed") : (useMockLocalFeed ? "Simulated Local" : "Live Camera")}
+                  {getMainStreamSubtitle()}
                 </span>
               </div>
             </div>
@@ -942,7 +1033,7 @@ export default function VoIPCallPage() {
                       ref={setRemoteVideoRef}
                       autoPlay
                       playsInline
-                      className="w-full h-full object-cover"
+                      className={`w-full h-full ${isRemoteScreenSharing ? "object-contain bg-black" : "object-cover"}`}
                     />
                   ) : (
                     <video
