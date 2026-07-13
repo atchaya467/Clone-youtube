@@ -144,6 +144,74 @@ export default function VoIPCallPage() {
     }
   };
 
+  // Start monitoring volume levels on a media stream using Web Audio API AnalyserNode
+  const startVolumeMonitor = (stream: MediaStream, callback: (isSpeaking: boolean) => void) => {
+    try {
+      const audioTracks = stream.getAudioTracks();
+      if (audioTracks.length === 0) return null;
+
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const source = audioCtx.createMediaStreamSource(stream);
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 256;
+      source.connect(analyser);
+
+      const bufferLength = analyser.frequencyBinCount;
+      const dataArray = new Uint8Array(bufferLength);
+
+      let speakingCounter = 0;
+      let silentCounter = 0;
+      let active = true;
+
+      const checkVolume = () => {
+        if (!active) return;
+        
+        const currentTracks = stream.getAudioTracks();
+        if (currentTracks.length === 0 || currentTracks[0].readyState === "ended") {
+          audioCtx.close();
+          return;
+        }
+
+        analyser.getByteFrequencyData(dataArray);
+        let sum = 0;
+        for (let i = 0; i < bufferLength; i++) {
+          sum += dataArray[i];
+        }
+        const average = sum / bufferLength;
+
+        // Check if average amplitude exceeds speaking threshold
+        if (average > 10 && currentTracks[0].enabled) {
+          speakingCounter++;
+          silentCounter = 0;
+          if (speakingCounter >= 2) {
+            callback(true);
+          }
+        } else {
+          silentCounter++;
+          speakingCounter = 0;
+          if (silentCounter >= 4) {
+            callback(false);
+          }
+        }
+
+        requestAnimationFrame(checkVolume);
+      };
+
+      checkVolume();
+      return {
+        close: () => {
+          active = false;
+          try {
+            audioCtx.close();
+          } catch (e) {}
+        }
+      };
+    } catch (e) {
+      console.warn("Volume monitor initialization failed:", e);
+      return null;
+    }
+  };
+
   // Ringtone generator during outgoing call
   const startRingtone = () => {
     stopRingtone();
@@ -508,6 +576,15 @@ export default function VoIPCallPage() {
               }
             } else if (sig.type === "screenshare") {
               setIsRemoteScreenSharing(!!sig.data?.active);
+            } else if (sig.type === "chat") {
+              setChatMessages((prev) => {
+                // Avoid duplicate messages
+                const isDuplicate = prev.some(
+                  (m) => m.text === sig.data.text && m.time === sig.data.time && m.sender === sig.data.sender
+                );
+                if (isDuplicate) return prev;
+                return [...prev, sig.data];
+              });
             } else if (sig.type === "leave") {
               const leavingName = sig.data?.name || friendName;
               toast.error(`${leavingName} has left the meeting.`);
@@ -548,26 +625,28 @@ export default function VoIPCallPage() {
     }
   };
 
-  // Simulate speaking indicator loops (only for mock simulation when remoteStream is null)
+  // Real voice-activated speaking indicators using Audio Analysis
   useEffect(() => {
-    if (callState !== "connected" || remoteStream) return;
-    
-    const interval = setInterval(() => {
-      setIsFriendSpeaking(Math.random() > 0.6);
-    }, 1800);
+    if (callState !== "connected" || !localStream) {
+      setIsLocalSpeaking(false);
+      return;
+    }
+    const monitor = startVolumeMonitor(localStream, setIsLocalSpeaking);
+    return () => {
+      if (monitor) monitor.close();
+    };
+  }, [callState, localStream]);
 
-    return () => clearInterval(interval);
+  useEffect(() => {
+    if (callState !== "connected" || !remoteStream) {
+      setIsFriendSpeaking(false);
+      return;
+    }
+    const monitor = startVolumeMonitor(remoteStream, setIsFriendSpeaking);
+    return () => {
+      if (monitor) monitor.close();
+    };
   }, [callState, remoteStream]);
-
-  useEffect(() => {
-    if (callState !== "connected") return;
-    
-    const interval = setInterval(() => {
-      setIsLocalSpeaking(!isMuted && Math.random() > 0.7);
-    }, 1500);
-
-    return () => clearInterval(interval);
-  }, [callState, isMuted]);
 
   // Screen sharing (YouTube tab / window)
   const toggleScreenShare = async () => {
@@ -773,30 +852,23 @@ export default function VoIPCallPage() {
     e.preventDefault();
     if (!newMessage.trim()) return;
 
-    setChatMessages((prev) => [
-      ...prev,
-      {
-        sender: user?.name || "You",
-        text: newMessage.trim(),
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      }
-    ]);
+    const msg = {
+      sender: user?.name || "You",
+      text: newMessage.trim(),
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    };
+
+    setChatMessages((prev) => [...prev, msg]);
     setNewMessage("");
 
-    // Simulate simulated friend replying in 1.5 seconds if remoteStream is not active
-    if (!remoteStream) {
-      setTimeout(() => {
-        setChatMessages((prev) => [
-          ...prev,
-          {
-            sender: friendName || "Nisha",
-            text: "Yeah, this looks awesome! The lag is very low.",
-            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-          }
-        ]);
-      }, 1500);
-      }
-    };
+    // Send chat signal to peer
+    axiosInstance.post("/signal/post", {
+      roomName,
+      type: "chat",
+      sender: localSenderId.current,
+      data: msg,
+    }).catch(err => console.error("Error sending chat message:", err));
+  };
 
     const getMainStreamOwnerName = () => {
       if (isScreenSharing && screenStream) {
@@ -916,29 +988,22 @@ export default function VoIPCallPage() {
               ) : isLocalVideoMain ? (
                 // Local video is main
                 isVideoOff ? (
-                  <div className="w-full h-full flex flex-col items-center justify-center text-slate-500 bg-slate-950">
+                  <div className="w-full h-full flex flex-col items-center justify-center text-slate-500 bg-slate-955">
                     <VideoOff className="w-10 h-10" />
                     <span className="text-sm font-bold mt-2">Your Camera is Off</span>
                   </div>
                 ) : useMockLocalFeed ? (
-                  <div className="relative w-full h-full bg-slate-950">
-                    <video 
-                      src="/video/vdo.mp4"
-                      autoPlay 
-                      playsInline 
-                      loop
-                      muted 
-                      className="w-full h-full object-cover mirror opacity-40"
-                    />
-                    <div className="absolute inset-0 flex flex-col items-center justify-center p-4 text-center bg-black/40">
-                      <span className="text-sm font-black text-amber-400 uppercase tracking-wide">Webcam Blocked</span>
-                      <button 
-                        onClick={(e) => retryWebcam(e)}
-                        className="mt-2 px-3 py-1 bg-orange-600 hover:bg-orange-500 text-white rounded-lg text-xs font-bold shadow transition-all duration-150"
-                      >
-                        Use Webcam
-                      </button>
+                  <div className="relative w-full h-full bg-slate-955 flex flex-col items-center justify-center text-slate-500">
+                    <div className="w-20 h-20 bg-slate-800 rounded-full flex items-center justify-center text-xl font-bold text-white mb-2 shadow-lg">
+                      {(user?.name || "You").charAt(0).toUpperCase()}
                     </div>
+                    <span className="text-xs font-bold">Camera is Blocked / Off</span>
+                    <button 
+                      onClick={(e) => retryWebcam(e)}
+                      className="mt-3 px-3 py-1.5 bg-orange-600 hover:bg-orange-500 active:bg-orange-700 text-white rounded-xl text-xs font-bold shadow transition-all duration-150 cursor-pointer"
+                    >
+                      Retry Webcam
+                    </button>
                   </div>
                 ) : (
                   <video 
@@ -958,16 +1023,17 @@ export default function VoIPCallPage() {
                   className={`w-full h-full ${isRemoteScreenSharing ? "object-contain bg-black" : "object-cover"}`}
                 />
               ) : (
-                // Fallback simulation plays the peer video
-                <video
-                  ref={remoteVideoRef}
-                  autoPlay
-                  playsInline
-                  loop
-                  muted
-                  src="/video/feel.mp4"
-                  className="w-full h-full object-cover"
-                />
+                // Waiting screen layout for a real WebRTC connection
+                <div className="w-full h-full flex flex-col items-center justify-center bg-slate-900 text-slate-400 p-6 text-center">
+                  <div className="relative mb-4">
+                    <div className="w-16 h-16 bg-orange-500/10 text-orange-500 rounded-full flex items-center justify-center animate-pulse">
+                      <Users className="w-8 h-8" />
+                    </div>
+                    <span className="absolute -inset-1 rounded-full border border-orange-500/20 animate-ping" />
+                  </div>
+                  <h3 className="text-lg font-bold text-white">Waiting for {friendName} to join...</h3>
+                  <p className="text-xs text-slate-500 mt-1 max-w-xs">Share the Room ID with your friend so they can join this video call.</p>
+                </div>
               )}
             </div>
             {/* NAME TAG & MIC STATE OVERLAY (FOR MAIN VIDEO STREAM OWNER) */}
@@ -1010,24 +1076,17 @@ export default function VoIPCallPage() {
                       <span className="text-[9px] font-bold mt-1">Camera Off</span>
                     </div>
                   ) : useMockLocalFeed ? (
-                    <div className="relative w-full h-full bg-slate-950">
-                      <video 
-                        src="/video/vdo.mp4"
-                        autoPlay 
-                        playsInline 
-                        loop
-                        muted 
-                        className="w-full h-full object-cover mirror opacity-30"
-                      />
-                      <div className="absolute inset-0 flex flex-col items-center justify-center p-1 text-center bg-black/40">
-                        <span className="text-[8px] sm:text-[9px] font-black text-amber-400 uppercase tracking-wide leading-none">Webcam Blocked</span>
-                        <button 
-                          onClick={(e) => retryWebcam(e)}
-                          className="mt-1 px-1.5 py-0.5 bg-orange-600 hover:bg-orange-500 active:bg-orange-700 text-white rounded text-[7px] sm:text-[8px] font-bold shadow-md transition-all duration-150 cursor-pointer"
-                        >
-                          Use Webcam
-                        </button>
+                    <div className="relative w-full h-full bg-slate-950 flex flex-col items-center justify-center text-slate-500">
+                      <div className="w-10 h-10 bg-slate-800 rounded-full flex items-center justify-center text-xs font-bold text-white mb-1 shadow-md">
+                        {(user?.name || "You").charAt(0).toUpperCase()}
                       </div>
+                      <span className="text-[8px] font-semibold text-slate-400">Blocked / Off</span>
+                      <button 
+                        onClick={(e) => retryWebcam(e)}
+                        className="mt-1 px-1.5 py-0.5 bg-orange-600 hover:bg-orange-500 active:bg-orange-700 text-white rounded text-[7px] sm:text-[8px] font-bold shadow-md transition-all duration-150 cursor-pointer"
+                      >
+                        Retry
+                      </button>
                     </div>
                   ) : (
                     <video 
@@ -1048,15 +1107,12 @@ export default function VoIPCallPage() {
                       className={`w-full h-full ${isRemoteScreenSharing ? "object-contain bg-black" : "object-cover"}`}
                     />
                   ) : (
-                    <video
-                      ref={remoteVideoRef}
-                      autoPlay
-                      playsInline
-                      loop
-                      muted
-                      src="/video/feel.mp4"
-                      className="w-full h-full object-cover"
-                    />
+                    <div className="w-full h-full flex flex-col items-center justify-center bg-slate-900 text-slate-500 text-center p-1">
+                      <div className="w-10 h-10 bg-slate-800 rounded-full flex items-center justify-center text-xs font-bold text-white mb-1 shadow-md">
+                        {friendName.charAt(0).toUpperCase()}
+                      </div>
+                      <span className="text-[8px] font-semibold text-slate-400">Connecting...</span>
+                    </div>
                   )
                 )}
                 <div className="absolute bottom-2 left-2 bg-black/70 px-2 py-0.5 rounded-lg text-[9px] font-extrabold text-white flex items-center gap-1">
@@ -1077,14 +1133,12 @@ export default function VoIPCallPage() {
                     className="w-full h-full object-cover"
                   />
                 ) : (
-                  <video
-                    autoPlay
-                    playsInline
-                    loop
-                    muted
-                    src="/video/feel.mp4"
-                    className="w-full h-full object-cover"
-                  />
+                  <div className="w-full h-full flex flex-col items-center justify-center bg-slate-955 text-slate-500 text-center p-1">
+                    <div className="w-8 h-8 bg-slate-800 rounded-full flex items-center justify-center text-[10px] font-bold text-white mb-1 shadow-md">
+                      {friendName.charAt(0).toUpperCase()}
+                    </div>
+                    <span className="text-[8px] font-semibold text-slate-400">Connecting...</span>
+                  </div>
                 )}
                 <div className="absolute bottom-2 left-2 bg-black/70 px-2 py-0.5 rounded-lg text-[9px] font-extrabold text-white">
                   <span>{friendName}</span>
