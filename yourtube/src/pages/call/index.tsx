@@ -23,7 +23,8 @@ import {
   VolumeX,
   Settings,
   PhoneCall,
-  Sparkles
+  Sparkles,
+  RefreshCw
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -49,6 +50,8 @@ export default function VoIPCallPage() {
   const [useMockLocalFeed, setUseMockLocalFeed] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isPipFloating, setIsPipFloating] = useState(true);
+  const [isLocalVideoMain, setIsLocalVideoMain] = useState(false);
+  const [facingMode, setFacingMode] = useState<"user" | "environment">("user");
   
   // Speakers talking animation state
   const [isFriendSpeaking, setIsFriendSpeaking] = useState(false);
@@ -259,6 +262,40 @@ export default function VoIPCallPage() {
       } catch (err2: any) {
         toast.error("Webcam error: Close all other camera tabs/apps and try again.");
       }
+    }
+  };
+
+  const flipCamera = async () => {
+    const newMode = facingMode === "user" ? "environment" : "user";
+    setFacingMode(newMode);
+    try {
+      // Stop current tracks
+      if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+      }
+      
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: newMode },
+        audio: !isMuted,
+      });
+      setLocalStream(stream);
+      setUseMockLocalFeed(false);
+      
+      // Update WebRTC senders
+      if (peerConnectionRef.current) {
+        const videoTrack = stream.getVideoTracks()[0];
+        const transceivers = peerConnectionRef.current.getTransceivers();
+        const videoTransceiver = transceivers.find(t => t.receiver.track.kind === 'video' || (t.sender.track && t.sender.track.kind === 'video'));
+        if (videoTransceiver) {
+          videoTransceiver.direction = "sendrecv";
+          videoTransceiver.sender.replaceTrack(videoTrack);
+        } else {
+          peerConnectionRef.current.addTrack(videoTrack, stream);
+        }
+      }
+      toast.success(`Switched to ${newMode === "user" ? "front" : "back"} camera`);
+    } catch (err) {
+      toast.error("Failed to switch camera. Device might only have one camera.");
     }
   };
 
@@ -686,7 +723,7 @@ export default function VoIPCallPage() {
           {/* THE MAIN VIDEO CANVAS AREA */}
           <div className="flex-1 bg-slate-950 relative overflow-hidden flex items-center justify-center">
             
-            {/* BACKGROUND: REMOTE PEER VIDEO (OR SCREEN SHARE FEED) */}
+            {/* BACKGROUND: REMOTE PEER VIDEO (OR LOCAL VIDEO IF SWAPPED) */}
             <div className="absolute inset-0 z-0">
               {isScreenSharing && screenStream ? (
                 // Screen share is active, remote feed moves to floating PiP, screen share takes main background
@@ -696,6 +733,42 @@ export default function VoIPCallPage() {
                   playsInline 
                   className="w-full h-full object-contain bg-black"
                 />
+              ) : isLocalVideoMain ? (
+                // Local video is main
+                isVideoOff ? (
+                  <div className="w-full h-full flex flex-col items-center justify-center text-slate-500 bg-slate-950">
+                    <VideoOff className="w-10 h-10" />
+                    <span className="text-sm font-bold mt-2">Your Camera is Off</span>
+                  </div>
+                ) : useMockLocalFeed ? (
+                  <div className="relative w-full h-full bg-slate-950">
+                    <video 
+                      src="/video/vdo.mp4"
+                      autoPlay 
+                      playsInline 
+                      loop
+                      muted 
+                      className="w-full h-full object-cover mirror opacity-40"
+                    />
+                    <div className="absolute inset-0 flex flex-col items-center justify-center p-4 text-center bg-black/40">
+                      <span className="text-sm font-black text-amber-400 uppercase tracking-wide">Webcam Blocked</span>
+                      <button 
+                        onClick={(e) => retryWebcam(e)}
+                        className="mt-2 px-3 py-1 bg-orange-600 hover:bg-orange-500 text-white rounded-lg text-xs font-bold shadow transition-all duration-150"
+                      >
+                        Use Webcam
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <video 
+                    ref={setLocalVideoRef} 
+                    autoPlay 
+                    playsInline 
+                    muted 
+                    className="w-full h-full object-cover mirror"
+                  />
+                )
               ) : remoteStream ? (
                 // A real remote feed stream is active
                 <video
@@ -718,67 +791,94 @@ export default function VoIPCallPage() {
               )}
             </div>
 
-            {/* NAME TAG & MIC STATE OVERLAY (REMOTE PEER) */}
+            {/* NAME TAG & MIC STATE OVERLAY (FOR MAIN VIDEO STREAM OWNER) */}
             <div className="absolute bottom-6 left-6 z-10 flex items-center gap-3 bg-black/60 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-slate-850">
               <div className="relative">
-                {isFriendSpeaking && (
+                {(!isLocalVideoMain ? isFriendSpeaking : isLocalSpeaking) && (
                   <span className="absolute -inset-1 rounded-full bg-emerald-500/40 animate-ping" />
                 )}
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black text-white ${isFriendSpeaking ? "bg-emerald-600" : "bg-blue-600"}`}>
-                  {friendName.charAt(0).toUpperCase()}
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black text-white ${(!isLocalVideoMain ? isFriendSpeaking : isLocalSpeaking) ? "bg-emerald-600" : "bg-blue-600"}`}>
+                  {(!isLocalVideoMain ? friendName : (user?.name || "You")).charAt(0).toUpperCase()}
                 </div>
               </div>
               <div>
                 <div className="text-xs font-bold text-white flex items-center gap-1.5">
-                  <span>{isScreenSharing ? `${friendName} (Screen Shared)` : friendName}</span>
-                  {isFriendSpeaking && <Volume2 className="w-3.5 h-3.5 text-emerald-400 animate-bounce" />}
+                  <span>{!isLocalVideoMain ? (isScreenSharing ? `${friendName} (Screen Shared)` : friendName) : "You"}</span>
+                  {(!isLocalVideoMain ? isFriendSpeaking : isLocalSpeaking) && <Volume2 className="w-3.5 h-3.5 text-emerald-400 animate-bounce" />}
                 </div>
                 <span className="text-[10px] text-slate-400">
-                  {remoteStream ? "Live Webcam Feed" : "Simulated Feed"}
+                  {!isLocalVideoMain ? (remoteStream ? "Live Webcam Feed" : "Simulated Feed") : (useMockLocalFeed ? "Simulated Local" : "Live Camera")}
                 </span>
               </div>
             </div>
 
-            {/* FLOATING LOCAL VIDEO PiP WINDOW */}
+            {/* FLOATING VIDEO PiP WINDOW */}
             {isPipFloating && (
-              <div className="absolute top-4 right-4 w-28 sm:w-48 aspect-video bg-slate-900 rounded-2xl overflow-hidden border border-slate-750 shadow-2xl z-20 transition-all duration-300">
-                {isVideoOff ? (
-                  <div className="w-full h-full flex flex-col items-center justify-center text-slate-500 bg-slate-950">
-                    <VideoOff className="w-6 h-6" />
-                    <span className="text-[9px] font-bold mt-1">Camera Off</span>
-                  </div>
-                ) : useMockLocalFeed ? (
-                  <div className="relative w-full h-full bg-slate-950 group">
+              <div 
+                onClick={() => setIsLocalVideoMain(!isLocalVideoMain)}
+                className="absolute top-4 right-4 w-28 sm:w-48 aspect-video bg-slate-900 rounded-2xl overflow-hidden border border-slate-750 shadow-2xl z-20 transition-all duration-300 cursor-pointer hover:scale-105 active:scale-95 group"
+                title="Click to swap screens"
+              >
+                {!isLocalVideoMain ? (
+                  // Local video in PIP
+                  isVideoOff ? (
+                    <div className="w-full h-full flex flex-col items-center justify-center text-slate-500 bg-slate-955">
+                      <VideoOff className="w-6 h-6" />
+                      <span className="text-[9px] font-bold mt-1">Camera Off</span>
+                    </div>
+                  ) : useMockLocalFeed ? (
+                    <div className="relative w-full h-full bg-slate-950">
+                      <video 
+                        src="/video/vdo.mp4"
+                        autoPlay 
+                        playsInline 
+                        loop
+                        muted 
+                        className="w-full h-full object-cover mirror opacity-30"
+                      />
+                      <div className="absolute inset-0 flex flex-col items-center justify-center p-1 text-center bg-black/40">
+                        <span className="text-[8px] sm:text-[9px] font-black text-amber-400 uppercase tracking-wide leading-none">Webcam Blocked</span>
+                        <button 
+                          onClick={(e) => retryWebcam(e)}
+                          className="mt-1 px-1.5 py-0.5 bg-orange-600 hover:bg-orange-500 active:bg-orange-700 text-white rounded text-[7px] sm:text-[8px] font-bold shadow-md transition-all duration-150 cursor-pointer"
+                        >
+                          Use Webcam
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
                     <video 
-                      src="/video/vdo.mp4"
+                      ref={setLocalVideoRef} 
                       autoPlay 
                       playsInline 
-                      loop
                       muted 
-                      className="w-full h-full object-cover mirror opacity-30"
+                      className="w-full h-full object-cover mirror"
                     />
-                    <div className="absolute inset-0 flex flex-col items-center justify-center p-1 text-center bg-black/40">
-                      <span className="text-[8px] sm:text-[9px] font-black text-amber-400 uppercase tracking-wide leading-none">Webcam Blocked</span>
-                      <button 
-                        onClick={(e) => retryWebcam(e)}
-                        className="mt-1 px-1.5 py-0.5 bg-orange-600 hover:bg-orange-500 active:bg-orange-700 text-white rounded text-[7px] sm:text-[8px] font-bold shadow-md transition-all duration-150 cursor-pointer"
-                      >
-                        Use Webcam
-                      </button>
-                    </div>
-                  </div>
+                  )
                 ) : (
-                  <video 
-                    ref={setLocalVideoRef} 
-                    autoPlay 
-                    playsInline 
-                    muted 
-                    className="w-full h-full object-cover mirror"
-                  />
+                  // Remote video in PIP
+                  remoteStream ? (
+                    <video
+                      ref={setRemoteVideoRef}
+                      autoPlay
+                      playsInline
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <video
+                      ref={remoteVideoRef}
+                      autoPlay
+                      playsInline
+                      loop
+                      muted
+                      src="/video/feel.mp4"
+                      className="w-full h-full object-cover"
+                    />
+                  )
                 )}
                 <div className="absolute bottom-2 left-2 bg-black/70 px-2 py-0.5 rounded-lg text-[9px] font-extrabold text-white flex items-center gap-1">
-                  <div className={`w-1.5 h-1.5 rounded-full ${isLocalSpeaking ? "bg-emerald-500 animate-pulse" : "bg-orange-500"}`} />
-                  <span>You</span>
+                  <div className={`w-1.5 h-1.5 rounded-full ${!isLocalVideoMain ? (isLocalSpeaking ? "bg-emerald-500 animate-pulse" : "bg-orange-500") : (isFriendSpeaking ? "bg-emerald-500 animate-pulse" : "bg-blue-500")}`} />
+                  <span>{!isLocalVideoMain ? "You" : friendName}</span>
                 </div>
               </div>
             )}
@@ -981,6 +1081,15 @@ export default function VoIPCallPage() {
               title={useMockLocalFeed ? "Force Real Webcam" : "Swap to Simulator"}
             >
               <Camera className="w-4 h-4 sm:w-5 sm:h-5" />
+            </Button>
+
+            {/* Flip Camera button */}
+            <Button 
+              onClick={flipCamera}
+              className="p-2 sm:p-3 rounded-xl w-9 h-9 sm:w-11 sm:h-11 bg-slate-800 hover:bg-slate-755 text-slate-200"
+              title="Flip Camera (Front/Back)"
+            >
+              <RefreshCw className="w-4 h-4 sm:w-5 sm:h-5" />
             </Button>
 
             {/* Screen Share button */}
