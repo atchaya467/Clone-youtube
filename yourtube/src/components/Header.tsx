@@ -126,10 +126,10 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
                 {(user.plan || "PREMIUM").toUpperCase()}
               </Link>
             )}
-            <Button variant="ghost" size="icon">
+            <Button variant="ghost" size="icon" className="hidden sm:flex">
               <VideoIcon className="w-6 h-6" />
             </Button>
-            <Button variant="ghost" size="icon">
+            <Button variant="ghost" size="icon" className="hidden sm:flex">
               <Bell className="w-6 h-6" />
             </Button>
             <DropdownMenu>

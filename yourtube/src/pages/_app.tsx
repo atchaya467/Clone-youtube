@@ -47,20 +47,33 @@ export default function App({ Component, pageProps }: AppProps) {
           ];
           const isSouthIndia = southIndiaStates.includes(stateName.toLowerCase());
 
-          // Robust, cross-browser timezone-independent IST Time Check
-          const now = new Date();
-          const utc = now.getTime() + now.getTimezoneOffset() * 60000;
-          const istOffset = 5.5 * 3600000; // IST is UTC + 5:30
-          const istTime = new Date(utc + istOffset);
-          const hour = istTime.getHours();
-          const minute = istTime.getMinutes();
-
-          const totalMinutes = hour * 60 + minute;
-          const start = 10 * 60; // 10:00 AM
-          const end = 12 * 60;   // 12:00 PM
-          const isBetweenTime = totalMinutes >= start && totalMinutes <= end;
-
-          return isSouthIndia && isBetweenTime;
+          // Robust, timezone-independent IST Time Check
+          try {
+            const istTimeString = new Date().toLocaleTimeString("en-US", {
+              timeZone: "Asia/Kolkata",
+              hour12: false,
+              hour: "2-digit",
+              minute: "2-digit"
+            });
+            const [hour, minute] = istTimeString.split(":").map(Number);
+            const totalMinutes = hour * 60 + minute;
+            const start = 10 * 60; // 10:00 AM
+            const end = 12 * 60;   // 12:00 PM
+            const isBetweenTime = totalMinutes >= start && totalMinutes <= end;
+            return isSouthIndia && isBetweenTime;
+          } catch (e) {
+            console.error("IST calculation error, falling back to UTC-offset check:", e);
+            const now = new Date();
+            const utc = now.getTime() + now.getTimezoneOffset() * 60000;
+            const istOffset = 5.5 * 3600000;
+            const istTime = new Date(utc + istOffset);
+            const hour = istTime.getHours();
+            const minute = istTime.getMinutes();
+            const totalMinutes = hour * 60 + minute;
+            const start = 10 * 60;
+            const end = 12 * 60;
+            return isSouthIndia && totalMinutes >= start && totalMinutes <= end;
+          }
         };
 
         if (checkLightTheme()) {

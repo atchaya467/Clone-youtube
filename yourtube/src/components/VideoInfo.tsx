@@ -199,23 +199,25 @@ const VideoInfo = ({ video }: any) => {
     <div className="space-y-4">
       <h1 className="text-xl font-semibold">{video.videotitle}</h1>
 
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Avatar className="w-10 h-10">
-            <AvatarFallback>{video.videochanel[0]}</AvatarFallback>
-          </Avatar>
-          <div>
-            <h3 className="font-medium text-slate-900 dark:text-white">{video.videochanel}</h3>
-            <p className="text-sm text-gray-650 dark:text-gray-400">1.2M subscribers</p>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-center justify-between md:justify-start w-full md:w-auto gap-4">
+          <div className="flex items-center gap-4">
+            <Avatar className="w-10 h-10">
+              <AvatarFallback>{video.videochanel[0]}</AvatarFallback>
+            </Avatar>
+            <div>
+              <h3 className="font-medium text-slate-900 dark:text-white">{video.videochanel}</h3>
+              <p className="text-sm text-gray-650 dark:text-gray-400">1.2M subscribers</p>
+            </div>
           </div>
           <Button className="ml-4">Subscribe</Button>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="flex items-center bg-gray-100 dark:bg-slate-800 rounded-full">
+        <div className="flex items-center gap-2 overflow-x-auto pb-2 md:pb-0 scrollbar-none w-full md:w-auto -mx-4 px-4 md:mx-0 md:px-0 flex-nowrap">
+          <div className="flex items-center bg-gray-100 dark:bg-slate-800 rounded-full shrink-0">
             <Button
               variant="ghost"
               size="sm"
-              className="rounded-l-full text-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+              className="rounded-l-full text-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 shrink-0"
               onClick={handleLike}
             >
               <ThumbsUp
@@ -225,11 +227,11 @@ const VideoInfo = ({ video }: any) => {
               />
               {likes.toLocaleString()}
             </Button>
-            <div className="w-px h-6 bg-gray-300 dark:bg-slate-700" />
+            <div className="w-px h-6 bg-gray-300 dark:bg-slate-700 shrink-0" />
             <Button
               variant="ghost"
               size="sm"
-              className="rounded-r-full text-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+              className="rounded-r-full text-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 shrink-0"
               onClick={handleDislike}
             >
               <ThumbsDown
@@ -243,7 +245,7 @@ const VideoInfo = ({ video }: any) => {
           <Button
             variant="ghost"
             size="sm"
-            className={`bg-gray-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-full ${
+            className={`bg-gray-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-full shrink-0 ${
               isWatchLater ? "text-primary dark:text-orange-500" : ""
             }`}
             onClick={handleWatchLater}
@@ -254,7 +256,7 @@ const VideoInfo = ({ video }: any) => {
           <Button
             variant="ghost"
             size="sm"
-            className="bg-gray-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-full"
+            className="bg-gray-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-full shrink-0"
           >
             <Share className="w-5 h-5 mr-2" />
             Share
@@ -262,7 +264,7 @@ const VideoInfo = ({ video }: any) => {
           <Button
             variant="ghost"
             size="sm"
-            className="bg-gray-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-full"
+            className="bg-gray-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-full shrink-0"
             onClick={handleDownload}
           >
             <Download className="w-5 h-5 mr-2" />
@@ -271,7 +273,7 @@ const VideoInfo = ({ video }: any) => {
           <Button
             variant="ghost"
             size="icon"
-            className="bg-gray-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-full"
+            className="bg-gray-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-full shrink-0"
           >
             <MoreHorizontal className="w-5 h-5" />
           </Button>
