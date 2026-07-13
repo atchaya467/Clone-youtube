@@ -196,6 +196,56 @@ export default function VoIPCallPage() {
     }
   };
 
+  const retryWebcam = async (e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: true,
+      });
+      setLocalStream(stream);
+      setUseMockLocalFeed(false);
+      toast.success("Webcam connected successfully!");
+      
+      // Update track in peer connection if active
+      if (peerConnectionRef.current) {
+        const videoTrack = stream.getVideoTracks()[0];
+        const senders = peerConnectionRef.current.getSenders();
+        const videoSender = senders.find(s => s.track && s.track.kind === 'video');
+        if (videoSender) {
+          videoSender.replaceTrack(videoTrack);
+        } else {
+          peerConnectionRef.current.addTrack(videoTrack, stream);
+        }
+      }
+    } catch (err: any) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: false,
+        });
+        setLocalStream(stream);
+        setUseMockLocalFeed(false);
+        toast.success("Webcam connected (No audio device found)!");
+        if (peerConnectionRef.current) {
+          const videoTrack = stream.getVideoTracks()[0];
+          const senders = peerConnectionRef.current.getSenders();
+          const videoSender = senders.find(s => s.track && s.track.kind === 'video');
+          if (videoSender) {
+            videoSender.replaceTrack(videoTrack);
+          } else {
+            peerConnectionRef.current.addTrack(videoTrack, stream);
+          }
+        }
+      } catch (err2: any) {
+        toast.error("Webcam error: Close all other camera tabs/apps and try again.");
+      }
+    }
+  };
+
   // Initiate call & WebRTC signaling
   const startCall = async () => {
     if (!roomName.trim() || !friendName.trim()) {
@@ -678,14 +728,25 @@ export default function VoIPCallPage() {
                     <span className="text-[9px] font-bold mt-1">Camera Off</span>
                   </div>
                 ) : useMockLocalFeed ? (
-                  <video 
-                    src="/video/vdo.mp4"
-                    autoPlay 
-                    playsInline 
-                    loop
-                    muted 
-                    className="w-full h-full object-cover mirror"
-                  />
+                  <div className="relative w-full h-full bg-slate-950 group">
+                    <video 
+                      src="/video/vdo.mp4"
+                      autoPlay 
+                      playsInline 
+                      loop
+                      muted 
+                      className="w-full h-full object-cover mirror opacity-30"
+                    />
+                    <div className="absolute inset-0 flex flex-col items-center justify-center p-1 text-center bg-black/40">
+                      <span className="text-[8px] sm:text-[9px] font-black text-amber-400 uppercase tracking-wide leading-none">Webcam Blocked</span>
+                      <button 
+                        onClick={(e) => retryWebcam(e)}
+                        className="mt-1 px-1.5 py-0.5 bg-orange-600 hover:bg-orange-500 active:bg-orange-700 text-white rounded text-[7px] sm:text-[8px] font-bold shadow-md transition-all duration-150 cursor-pointer"
+                      >
+                        Use Webcam
+                      </button>
+                    </div>
+                  </div>
                 ) : (
                   <video 
                     ref={setLocalVideoRef} 
