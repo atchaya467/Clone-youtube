@@ -76,6 +76,7 @@ export default function VoIPCallPage() {
   const localSenderId = useRef<string>(`peer_${Math.random().toString(36).substring(2, 9)}`);
   const pollingIntervalRef = useRef<any>(null);
   const appliedSignalIds = useRef<Set<string>>(new Set());
+  const callStartTimeRef = useRef<number>(0);
   
   // Recording
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -310,6 +311,7 @@ export default function VoIPCallPage() {
       return;
     }
 
+    callStartTimeRef.current = Date.now();
     setCallState("calling");
     toast.info(`Calling ${friendName}...`);
     startRingtone();
@@ -375,7 +377,9 @@ export default function VoIPCallPage() {
       // 2. Fetch existing room signals to identify if we are the Offeror or Answerer
       const getRes = await axiosInstance.get(`/signal/get?roomName=${roomName}`);
       const signals = getRes.data.signals || [];
-      const offerSignal = signals.find((s: any) => s.type === "offer");
+      // Filter out older signals from previous call sessions in the same room
+      const activeSignals = signals.filter((s: any) => new Date(s.createdAt).getTime() >= callStartTimeRef.current - 5000);
+      const offerSignal = activeSignals.find((s: any) => s.type === "offer");
 
       if (!offerSignal) {
         // A. No offer exists. We are Peer A (Offeror / Caller)
@@ -409,6 +413,10 @@ export default function VoIPCallPage() {
           const res = await axiosInstance.get(`/signal/get?roomName=${roomName}&sender=${localSenderId.current}`);
           const newSignals = res.data.signals || [];
           for (const sig of newSignals) {
+            // Ignore signals created before this call started to prevent conflict with leftover signals
+            const sigTime = new Date(sig.createdAt).getTime();
+            if (sigTime < callStartTimeRef.current - 5000) continue;
+
             if (appliedSignalIds.current.has(sig._id)) continue;
             appliedSignalIds.current.add(sig._id);
 
