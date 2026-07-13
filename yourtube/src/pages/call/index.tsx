@@ -231,6 +231,15 @@ export default function VoIPCallPage() {
         }
       };
 
+      // Monitor connection state to alert on network mismatches
+      pc.onconnectionstatechange = () => {
+        if (pc.connectionState === "failed") {
+          toast.error("WebRTC connection failed. Ensure BOTH your phone and laptop are on the same Wi-Fi network!", {
+            duration: 8000
+          });
+        }
+      };
+
       // Handle incoming remote audio/video tracks (WebRTC peer video feed)
       pc.ontrack = (event) => {
         if (event.streams && event.streams[0]) {
