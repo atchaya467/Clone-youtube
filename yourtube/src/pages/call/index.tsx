@@ -159,6 +159,10 @@ export default function VoIPCallPage() {
   };
 
   useEffect(() => {
+    if (typeof window !== "undefined" && window.location.hostname === "clone-youtube-one-lilac.vercel.app") {
+      window.location.replace("https://clone-youtube-git-main-atchaya1.vercel.app/call");
+      return;
+    }
     startLocalStream();
     return () => {
       stopRingtone();
