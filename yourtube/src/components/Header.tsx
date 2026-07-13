@@ -30,12 +30,14 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
   //   image: "https://github.com/shadcn.png?height=32&width=32",
   // };
   const [searchQuery, setSearchQuery] = useState("");
+  const [isMobileSearchActive, setIsMobileSearchActive] = useState(false);
   const [isdialogeopen, setisdialogeopen] = useState(false);
   const router = useRouter();
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (searchQuery.trim()) {
       router.push(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
+      setIsMobileSearchActive(false);
     }
   };
   const handleKeypress = (e: React.KeyboardEvent) => {
@@ -43,6 +45,31 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
       handleSearch(e as any);
     }
   };
+
+  if (isMobileSearchActive) {
+    return (
+      <header className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-900 border-b dark:border-slate-850 text-slate-900 dark:text-white transition-colors duration-200 w-full h-[57px] z-50">
+        <Button variant="ghost" size="icon" onClick={() => setIsMobileSearchActive(false)}>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+        </Button>
+        <form onSubmit={handleSearch} className="flex items-center gap-2 flex-1">
+          <Input
+            autoFocus
+            type="search"
+            placeholder="Search"
+            value={searchQuery}
+            onKeyPress={handleKeypress}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="rounded-full focus-visible:ring-0 dark:bg-slate-950 dark:border-slate-800 dark:text-white"
+          />
+          <Button type="submit" variant="ghost" size="icon">
+            <Search className="w-5 h-5" />
+          </Button>
+        </form>
+      </header>
+    );
+  }
+
   return (
     <header className="flex items-center justify-between px-4 py-2 bg-white dark:bg-slate-900 border-b dark:border-slate-850 text-slate-900 dark:text-white transition-colors duration-200">
       <div className="flex items-center gap-4">
@@ -59,9 +86,11 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
           <span className="text-xs text-gray-400 ml-1">IN</span>
         </Link>
       </div>
+      
+      {/* Desktop Search */}
       <form
         onSubmit={handleSearch}
-        className="flex items-center gap-2 flex-1 max-w-2xl mx-4"
+        className="hidden md:flex items-center gap-2 flex-1 max-w-2xl mx-4"
       >
         <div className="flex flex-1">
           <Input
@@ -70,7 +99,7 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
             value={searchQuery}
             onKeyPress={handleKeypress}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="rounded-l-full border-r-0 focus-visible:ring-0 dark:bg-slate-950 dark:border-slate-800 dark:text-white dark:placeholder-slate-500"
+            className="rounded-l-full border-r-0 focus-visible:ring-0 dark:bg-slate-955 dark:border-slate-800 dark:text-white dark:placeholder-slate-500"
           />
           <Button
             type="submit"
@@ -83,7 +112,12 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
           <Mic className="w-5 h-5" />
         </Button>
       </form>
+
       <div className="flex items-center gap-2">
+        {/* Mobile Search Trigger Icon */}
+        <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setIsMobileSearchActive(true)}>
+          <Search className="w-5 h-5" />
+        </Button>
         {user ? (
           <>
             {user.isPremium && (

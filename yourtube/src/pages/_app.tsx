@@ -86,12 +86,12 @@ export default function App({ Component, pageProps }: AppProps) {
         <title>Your-Tube Clone</title>
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0" />
       </Head>
-      <div className="min-h-screen bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-200 flex flex-col w-full">
+      <div className="min-h-screen bg-white dark:bg-slate-955 text-slate-900 dark:text-slate-100 transition-colors duration-200 flex flex-col w-full overflow-x-hidden">
         <Header onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />
         <Toaster />
-        <div className="flex flex-1 w-full relative">
+        <div className="flex flex-1 w-full relative overflow-x-hidden">
           <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
-          <main className="flex-grow flex-1 min-w-0 w-full">
+          <main className="flex-grow flex-1 min-w-0 w-full overflow-x-hidden">
             <Component {...pageProps} />
           </main>
         </div>
