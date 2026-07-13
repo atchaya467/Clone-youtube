@@ -16,7 +16,11 @@ import { useRouter } from "next/router";
 import { useUser } from "@/lib/AuthContext";
 import { useRazorpayUpgrade } from "@/lib/useRazorpay";
 
-const Header = () => {
+interface HeaderProps {
+  onToggleSidebar?: () => void;
+}
+
+const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
   const { user, logout, handlegooglesignin, handleDemoSignin, upgradeUserLocally } = useUser();
   const { triggerUpgrade } = useRazorpayUpgrade(user, upgradeUserLocally);
   // const user: any = {
@@ -42,7 +46,7 @@ const Header = () => {
   return (
     <header className="flex items-center justify-between px-4 py-2 bg-white dark:bg-slate-900 border-b dark:border-slate-850 text-slate-900 dark:text-white transition-colors duration-200">
       <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon">
+        <Button variant="ghost" size="icon" onClick={onToggleSidebar}>
           <Menu className="w-6 h-6" />
         </Button>
         <Link href="/" className="flex items-center gap-1">

@@ -17,14 +17,37 @@ import Channeldialogue from "./channeldialogue";
 import { useUser } from "@/lib/AuthContext";
 import { useRazorpayUpgrade } from "@/lib/useRazorpay";
 
-const Sidebar = () => {
+interface SidebarProps {
+  isOpen?: boolean;
+  onClose?: () => void;
+}
+
+const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const { user, upgradeUserLocally } = useUser();
   const { triggerUpgrade } = useRazorpayUpgrade(user, upgradeUserLocally);
 
   const [isdialogeopen, setisdialogeopen] = useState(false);
   return (
-    <aside className="hidden md:flex w-64 bg-white dark:bg-slate-900 border-r dark:border-slate-850 min-h-screen p-2 flex-col justify-between dark:text-white transition-colors duration-200">
-      <nav className="space-y-1 flex-1">
+    <>
+      {/* Mobile Sidebar overlay backdrop */}
+      {isOpen && (
+        <div 
+          className="fixed inset-0 bg-black/60 z-40 md:hidden backdrop-blur-sm"
+          onClick={onClose}
+        />
+      )}
+      <aside 
+        onClick={() => {
+          if (onClose && typeof window !== "undefined" && window.innerWidth < 768) {
+            onClose();
+          }
+        }}
+        className={`
+          ${isOpen ? "flex fixed left-0 top-0 bottom-0 z-50 animate-in slide-in-from-left duration-200" : "hidden"} 
+          md:flex w-64 bg-white dark:bg-slate-900 border-r dark:border-slate-850 min-h-screen p-2 flex-col justify-between dark:text-white transition-colors duration-200
+        `}
+      >
+        <nav className="space-y-1 flex-1">
         <Link href="/">
           <Button variant="ghost" className="w-full justify-start">
             <Home className="w-5 h-5 mr-3" />
@@ -127,6 +150,7 @@ const Sidebar = () => {
         mode="create"
       />
     </aside>
+    </>
   );
 };
 
