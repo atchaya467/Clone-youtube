@@ -8,7 +8,7 @@ const signalSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ["offer", "answer", "candidate"],
+    enum: ["offer", "answer", "candidate", "leave", "screenshare"],
     required: true,
   },
   sender: {

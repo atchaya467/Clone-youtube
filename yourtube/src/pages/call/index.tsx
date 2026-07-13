@@ -79,6 +79,7 @@ export default function VoIPCallPage() {
   const pollingIntervalRef = useRef<any>(null);
   const appliedSignalIds = useRef<Set<string>>(new Set());
   const callStartTimeRef = useRef<number>(0);
+  const queuedCandidatesRef = useRef<any[]>([]);
   
   // Recording
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -201,7 +202,7 @@ export default function VoIPCallPage() {
     };
   }, []);
 
-  // Synchronous leave signal on page unload/close
+  // Synchronous leave signal on page unload/close using keepalive fetch
   useEffect(() => {
     const handleUnload = () => {
       if (callState === "connected" || callState === "calling") {
@@ -213,17 +214,12 @@ export default function VoIPCallPage() {
           data: { name: user?.name || "Friend" }
         });
         
-        if (navigator.sendBeacon) {
-          const blob = new Blob([body], { type: "application/json" });
-          navigator.sendBeacon(url, blob);
-        } else {
-          fetch(url, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body,
-            keepalive: true
-          });
-        }
+        fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body,
+          keepalive: true
+        }).catch(() => {});
       }
     };
 
@@ -438,8 +434,8 @@ export default function VoIPCallPage() {
       // 2. Fetch existing room signals to identify if we are the Offeror or Answerer
       const getRes = await axiosInstance.get(`/signal/get?roomName=${roomName}`);
       const signals = getRes.data.signals || [];
-      // Filter out older signals from previous call sessions in the same room
-      const activeSignals = signals.filter((s: any) => new Date(s.createdAt).getTime() >= callStartTimeRef.current - 5000);
+      // Filter out older signals from previous call sessions in the same room (10 minutes window)
+      const activeSignals = signals.filter((s: any) => new Date(s.createdAt).getTime() >= callStartTimeRef.current - 600000);
       const offerSignal = activeSignals.find((s: any) => s.type === "offer");
 
       if (!offerSignal) {
@@ -480,9 +476,9 @@ export default function VoIPCallPage() {
           const res = await axiosInstance.get(`/signal/get?roomName=${roomName}&sender=${localSenderId.current}`);
           const newSignals = res.data.signals || [];
           for (const sig of newSignals) {
-            // Ignore signals created before this call started to prevent conflict with leftover signals
+            // Ignore signals created before this call started to prevent conflict with leftover signals (10 minutes window)
             const sigTime = new Date(sig.createdAt).getTime();
-            if (sigTime < callStartTimeRef.current - 5000) continue;
+            if (sigTime < callStartTimeRef.current - 600000) continue;
 
             if (appliedSignalIds.current.has(sig._id)) continue;
             appliedSignalIds.current.add(sig._id);
@@ -490,9 +486,23 @@ export default function VoIPCallPage() {
             if (sig.type === "answer" && pc.signalingState === "have-local-offer") {
               await pc.setRemoteDescription(new RTCSessionDescription(sig.data));
               toast.success(`${friendName} joined the call!`);
+              
+              // Process queued candidates
+              for (const cand of queuedCandidatesRef.current) {
+                try {
+                  await pc.addIceCandidate(new RTCIceCandidate(cand));
+                } catch (err) {
+                  console.warn("Failed to add queued candidate:", err);
+                }
+              }
+              queuedCandidatesRef.current = [];
             } else if (sig.type === "candidate") {
               try {
-                await pc.addIceCandidate(new RTCIceCandidate(sig.data));
+                if (pc.remoteDescription) {
+                  await pc.addIceCandidate(new RTCIceCandidate(sig.data));
+                } else {
+                  queuedCandidatesRef.current.push(sig.data);
+                }
               } catch (e) {
                 console.warn("Failed to add ICE candidate:", e);
               }
@@ -726,6 +736,7 @@ export default function VoIPCallPage() {
     setScreenStream(null);
     setIsScreenSharing(false);
     setIsRemoteScreenSharing(false);
+    queuedCandidatesRef.current = [];
     setCallState("ended");
     
     if (sendLeaveSignal) {
@@ -754,6 +765,7 @@ export default function VoIPCallPage() {
     setFriendName("");
     setChatMessages([]);
     setIsRemoteScreenSharing(false);
+    queuedCandidatesRef.current = [];
   };
 
   // Handle message send in chat
