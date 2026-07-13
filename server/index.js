@@ -11,6 +11,7 @@ import historyrroutes from "./routes/history.js";
 import commentroutes from "./routes/comment.js";
 import downloadroutes from "./routes/download.js";
 import paymentroutes from "./routes/payment.js";
+import signalroutes from "./routes/signal.js";
 dotenv.config();
 const app = express();
 import path from "path";
@@ -141,6 +142,7 @@ app.use("/history", historyrroutes);
 app.use("/comment", commentroutes);
 app.use("/download", downloadroutes);
 app.use("/payment", paymentroutes);
+app.use("/signal", signalroutes);
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {

@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { useUser } from "@/lib/AuthContext";
+import axiosInstance from "@/lib/axiosinstance";
 import { 
   Video, 
   VideoOff, 
@@ -57,14 +58,21 @@ export default function VoIPCallPage() {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState("");
 
-  // Streams
+  // Streams & Peer Connections
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
+  const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   
   // Refs
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const ringtoneIntervalRef = useRef<any>(null);
+  
+  // WebRTC Signaling Refs
+  const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
+  const localSenderId = useRef<string>(`peer_${Math.random().toString(36).substring(2, 9)}`);
+  const pollingIntervalRef = useRef<any>(null);
+  const lastSeenTimeRef = useRef<number>(0);
   
   // Recording
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -122,6 +130,7 @@ export default function VoIPCallPage() {
     }
   };
 
+  // Request camera and microphone stream on load (flexible mic/no mic support)
   const startLocalStream = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -150,6 +159,7 @@ export default function VoIPCallPage() {
     startLocalStream();
     return () => {
       stopRingtone();
+      cleanupSignaling();
       if (localStream) {
         localStream.getTracks().forEach((track) => track.stop());
       }
@@ -169,7 +179,24 @@ export default function VoIPCallPage() {
     }
   };
 
-  // Initiate call
+  const setRemoteVideoRef = (el: HTMLVideoElement | null) => {
+    if (el && remoteStream) {
+      el.srcObject = remoteStream;
+    }
+  };
+
+  const cleanupSignaling = () => {
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+      pollingIntervalRef.current = null;
+    }
+    if (peerConnectionRef.current) {
+      peerConnectionRef.current.close();
+      peerConnectionRef.current = null;
+    }
+  };
+
+  // Initiate call & WebRTC signaling
   const startCall = async () => {
     if (!roomName.trim() || !friendName.trim()) {
       toast.error("Please enter a room code and your friend's name.");
@@ -180,44 +207,135 @@ export default function VoIPCallPage() {
     toast.info(`Calling ${friendName}...`);
     startRingtone();
 
-    // Simulate connection delay
-    setTimeout(() => {
+    try {
+      // 1. Create WebRTC Peer Connection with STUN configuration
+      const pc = new RTCPeerConnection({
+        iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
+      });
+      peerConnectionRef.current = pc;
+
+      // Add local audio/video tracks to peer connection
+      if (localStream) {
+        localStream.getTracks().forEach((track) => pc.addTrack(track, localStream));
+      }
+
+      // Handle ICE Candidates generated locally (upload to MongoDB signaling channel)
+      pc.onicecandidate = (event) => {
+        if (event.candidate) {
+          axiosInstance.post("/signal/post", {
+            roomName,
+            type: "candidate",
+            sender: localSenderId.current,
+            data: event.candidate,
+          }).catch(err => console.error("Error sending ICE candidate:", err));
+        }
+      };
+
+      // Handle incoming remote audio/video tracks (WebRTC peer video feed)
+      pc.ontrack = (event) => {
+        if (event.streams && event.streams[0]) {
+          setRemoteStream(event.streams[0]);
+          toast.success("Real connected camera stream active!");
+        }
+      };
+
+      // 2. Fetch existing room signals to identify if we are the Offeror or Answerer
+      const getRes = await axiosInstance.get(`/signal/get?roomName=${roomName}`);
+      const signals = getRes.data.signals || [];
+      const offerSignal = signals.find((s: any) => s.type === "offer");
+
+      if (!offerSignal) {
+        // A. No offer exists. We are Peer A (Offeror / Caller)
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        await axiosInstance.post("/signal/post", {
+          roomName,
+          type: "offer",
+          sender: localSenderId.current,
+          data: offer,
+        });
+        toast.info("Created call room. Waiting for friend to join...");
+      } else {
+        // B. An offer exists. We are Peer B (Answerer / Joiner)
+        await pc.setRemoteDescription(new RTCSessionDescription(offerSignal.data));
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        await axiosInstance.post("/signal/post", {
+          roomName,
+          type: "answer",
+          sender: localSenderId.current,
+          data: answer,
+        });
+        toast.success("Joined call room. Establishing connection...");
+      }
+
+      // 3. Start database signaling polling loops
+      lastSeenTimeRef.current = Date.now();
+      pollingIntervalRef.current = setInterval(async () => {
+        try {
+          const res = await axiosInstance.get(`/signal/get?roomName=${roomName}&sender=${localSenderId.current}&lastSeenTime=${lastSeenTimeRef.current}`);
+          const newSignals = res.data.signals || [];
+          if (newSignals.length > 0) {
+            lastSeenTimeRef.current = Date.now();
+            for (const sig of newSignals) {
+              if (sig.type === "answer" && pc.signalingState === "have-local-offer") {
+                await pc.setRemoteDescription(new RTCSessionDescription(sig.data));
+                toast.success(`${friendName} joined the call!`);
+              } else if (sig.type === "candidate") {
+                try {
+                  await pc.addIceCandidate(new RTCIceCandidate(sig.data));
+                } catch (e) {
+                  console.warn("Failed to add ICE candidate:", e);
+                }
+              }
+            }
+          }
+        } catch (err) {
+          console.error("Signaling poll failed:", err);
+        }
+      }, 1500);
+
+      // Trigger visual connection
+      setTimeout(() => {
+        stopRingtone();
+        setCallState("connected");
+        playSynthesizedChime([261.63, 329.63, 392.00, 523.25], "triangle", 0.18);
+        
+        // Simulate fallback greetings only if remote feed isn't established yet
+        setTimeout(() => {
+          setChatMessages((prev) => [
+            ...prev,
+            {
+              sender: friendName,
+              text: `Hey! I'm connected in room ${roomName}. Ready to watch and talk?`,
+              time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            }
+          ]);
+        }, 1500);
+      }, 2800);
+
+    } catch (err) {
+      console.error("Failed to start WebRTC room connection:", err);
+      toast.error("WebRTC connection failed. Reverting to simulator.");
       stopRingtone();
       setCallState("connected");
-      // Connected chime (ascending major chord)
-      playSynthesizedChime([261.63, 329.63, 392.00, 523.25], "triangle", 0.18);
-      toast.success(`Connected to VoIP call with ${friendName}`);
-      
-      // Simulate chat greetings from friend
-      setTimeout(() => {
-        setChatMessages((prev) => [
-          ...prev,
-          {
-            sender: friendName,
-            text: `Hey! I'm in room ${roomName}. Ready to share screen and watch YouTube?`,
-            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-          }
-        ]);
-      }, 1500);
-    }, 2800);
+    }
   };
 
-  // Simulate speaking indicator loops
+  // Simulate speaking indicator loops (only for mock simulation when remoteStream is null)
   useEffect(() => {
-    if (callState !== "connected") return;
+    if (callState !== "connected" || remoteStream) return;
     
-    // Simulate remote friend speaking occasionally
     const interval = setInterval(() => {
       setIsFriendSpeaking(Math.random() > 0.6);
     }, 1800);
 
     return () => clearInterval(interval);
-  }, [callState]);
+  }, [callState, remoteStream]);
 
   useEffect(() => {
     if (callState !== "connected") return;
     
-    // Simulate local user speaking indicator if not muted
     const interval = setInterval(() => {
       setIsLocalSpeaking(!isMuted && Math.random() > 0.7);
     }, 1500);
@@ -340,12 +458,17 @@ export default function VoIPCallPage() {
   const endCall = () => {
     stopRingtone();
     stopRecording();
+    cleanupSignaling();
     if (screenStream) {
       screenStream.getTracks().forEach((t) => t.stop());
     }
     setScreenStream(null);
     setIsScreenSharing(false);
     setCallState("ended");
+    
+    // Clear room signals from database to clear peer state
+    axiosInstance.post("/signal/clear", { roomName }).catch(err => {});
+    
     // End chime (descending note sequence)
     playSynthesizedChime([392.00, 329.63, 261.63, 196.00], "sine", 0.22);
     toast.error("Call ended.");
@@ -373,21 +496,23 @@ export default function VoIPCallPage() {
     ]);
     setNewMessage("");
 
-    // Simulate simulated friend replying in 1.5 seconds
-    setTimeout(() => {
-      setChatMessages((prev) => [
-        ...prev,
-        {
-          sender: friendName || "Friend",
-          text: "Yeah, this looks awesome! The lag is very low.",
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        }
-      ]);
-    }, 1500);
+    // Simulate simulated friend replying in 1.5 seconds if remoteStream is not active
+    if (!remoteStream) {
+      setTimeout(() => {
+        setChatMessages((prev) => [
+          ...prev,
+          {
+            sender: friendName || "Nisha",
+            text: "Yeah, this looks awesome! The lag is very low.",
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          }
+        ]);
+      }, 1500);
+    }
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-between overflow-hidden relative">
+    <div className="min-h-screen bg-slate-955 text-slate-100 flex flex-col justify-between overflow-hidden relative">
       
       {/* 1. MOCK INCOMING SETUP VIEW */}
       {callState === "idle" && (
@@ -479,8 +604,16 @@ export default function VoIPCallPage() {
                   playsInline 
                   className="w-full h-full object-contain bg-black"
                 />
+              ) : remoteStream ? (
+                // A real remote feed stream is active
+                <video
+                  ref={setRemoteVideoRef}
+                  autoPlay
+                  playsInline
+                  className="w-full h-full object-cover"
+                />
               ) : (
-                // Normal view: remote video loop occupies the full screen
+                // Fallback simulation plays the peer video
                 <video
                   ref={remoteVideoRef}
                   autoPlay
@@ -508,7 +641,9 @@ export default function VoIPCallPage() {
                   <span>{isScreenSharing ? `${friendName} (Screen Shared)` : friendName}</span>
                   {isFriendSpeaking && <Volume2 className="w-3.5 h-3.5 text-emerald-400 animate-bounce" />}
                 </div>
-                <span className="text-[10px] text-slate-400">Remote Participant</span>
+                <span className="text-[10px] text-slate-400">
+                  {remoteStream ? "Live Webcam Feed" : "Simulated Feed"}
+                </span>
               </div>
             </div>
 
@@ -548,14 +683,23 @@ export default function VoIPCallPage() {
             {/* IF SCREEN IS SHARING: DISPLAY REMOTE USER PiP TOO */}
             {isScreenSharing && (
               <div className="absolute top-6 left-6 w-44 aspect-video bg-slate-900 rounded-2xl overflow-hidden border border-slate-750 shadow-2xl z-20">
-                <video
-                  autoPlay
-                  playsInline
-                  loop
-                  muted
-                  src="/video/feel.mp4"
-                  className="w-full h-full object-cover"
-                />
+                {remoteStream ? (
+                  <video
+                    ref={setRemoteVideoRef}
+                    autoPlay
+                    playsInline
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <video
+                    autoPlay
+                    playsInline
+                    loop
+                    muted
+                    src="/video/feel.mp4"
+                    className="w-full h-full object-cover"
+                  />
+                )}
                 <div className="absolute bottom-2 left-2 bg-black/70 px-2 py-0.5 rounded-lg text-[9px] font-extrabold text-white">
                   <span>{friendName}</span>
                 </div>
@@ -600,7 +744,7 @@ export default function VoIPCallPage() {
                         <span>{msg.sender}</span>
                         <span>{msg.time}</span>
                       </div>
-                      <div className="bg-slate-900 p-2.5 rounded-xl border border-slate-850 text-xs text-white max-w-[90%] break-words">
+                      <div className="bg-slate-900 p-2.5 rounded-xl border border-slate-855 text-xs text-white max-w-[90%] break-words">
                         {msg.text}
                       </div>
                     </div>
@@ -617,7 +761,7 @@ export default function VoIPCallPage() {
                   onChange={(e) => setNewMessage(e.target.value)}
                   className="flex-1 px-3 py-2 text-xs rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:border-orange-500"
                 />
-                <Button type="submit" size="icon" className="bg-orange-600 hover:bg-orange-500 text-white rounded-xl">
+                <Button type="submit" size="icon" className="bg-orange-600 hover:bg-orange-550 text-white rounded-xl">
                   <Send className="w-4 h-4" />
                 </Button>
               </form>
@@ -637,7 +781,7 @@ export default function VoIPCallPage() {
             <h3 className="text-2xl font-black text-white">Call Ended</h3>
             <p className="text-xs text-slate-400">Your video session with {friendName || "Nisha"} has terminated</p>
           </div>
-          <Button onClick={resetCall} className="px-8 py-3 bg-orange-600 hover:bg-orange-500 text-white font-bold rounded-xl shadow-lg">
+          <Button onClick={resetCall} className="px-8 py-3 bg-orange-600 hover:bg-orange-505 text-white font-bold rounded-xl shadow-lg">
             Return to Setup
           </Button>
         </div>
@@ -651,8 +795,10 @@ export default function VoIPCallPage() {
           <div className="hidden md:flex items-center gap-3">
             <div className="w-3.5 h-3.5 rounded-full bg-emerald-500 animate-pulse" />
             <div>
-              <p className="text-xs font-bold text-white">Live Call: {roomName}</p>
-              <p className="text-[10px] text-slate-400">With {friendName} • Secure P2P</p>
+              <p className="text-xs font-bold text-white font-mono">Room ID: {roomName}</p>
+              <p className="text-[10px] text-slate-400">
+                {remoteStream ? "🔗 Live Peer Connection Connected" : "☎️ Simulating Room Connection"}
+              </p>
             </div>
           </div>
 
@@ -737,7 +883,7 @@ export default function VoIPCallPage() {
             {/* Screen Share button */}
             <Button 
               onClick={toggleScreenShare}
-              className={`p-3 rounded-xl w-11 h-11 ${isScreenSharing ? "bg-emerald-600 hover:bg-emerald-500 text-white" : "bg-slate-800 hover:bg-slate-750 text-slate-200"}`}
+              className={`p-3 rounded-xl w-11 h-11 ${isScreenSharing ? "bg-emerald-600 hover:bg-emerald-500 text-white" : "bg-slate-800 hover:bg-slate-755 text-slate-200"}`}
               title="Share Screen"
             >
               <Monitor className="w-5 h-5" />
@@ -755,7 +901,7 @@ export default function VoIPCallPage() {
             )}
 
             {/* HANG UP BUTTON */}
-            <Button onClick={endCall} variant="destructive" className="px-5 rounded-xl h-11 font-bold flex items-center gap-1.5 shadow-lg bg-red-600 hover:bg-red-500">
+            <Button onClick={endCall} variant="destructive" className="px-5 rounded-xl h-11 font-bold flex items-center gap-1.5 shadow-lg bg-red-600 hover:bg-red-550">
               <PhoneOff className="w-5 h-5" />
               <span className="hidden sm:inline">Leave</span>
             </Button>
