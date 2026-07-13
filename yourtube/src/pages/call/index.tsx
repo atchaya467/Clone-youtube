@@ -417,6 +417,12 @@ export default function VoIPCallPage() {
               } catch (e) {
                 console.warn("Failed to add ICE candidate:", e);
               }
+            } else if (sig.type === "leave") {
+              const leavingName = sig.data?.name || friendName;
+              toast.error(`${leavingName} has left the call.`);
+              setTimeout(() => {
+                endCall(false); // End call locally without sending duplicate signal
+              }, 1500);
             }
           }
         } catch (err) {
@@ -480,6 +486,25 @@ export default function VoIPCallPage() {
       }
       setScreenStream(null);
       setIsScreenSharing(false);
+      
+      // Restore local webcam track in the peer connection
+      if (peerConnectionRef.current) {
+        const transceivers = peerConnectionRef.current.getTransceivers();
+        const videoTransceiver = transceivers.find(t => t.receiver.track.kind === 'video' || (t.sender.track && t.sender.track.kind === 'video'));
+        if (videoTransceiver) {
+          if (localStream) {
+            const videoTrack = localStream.getVideoTracks()[0];
+            if (videoTrack) {
+              videoTransceiver.direction = "sendrecv";
+              videoTransceiver.sender.replaceTrack(videoTrack);
+            }
+          } else {
+            // No webcam track available, fall back to recvonly
+            videoTransceiver.direction = "recvonly";
+            videoTransceiver.sender.replaceTrack(null);
+          }
+        }
+      }
       toast.info("Stopped screen sharing.");
     } else {
       try {
@@ -492,9 +517,40 @@ export default function VoIPCallPage() {
         setIsScreenSharing(true);
         toast.success("Screen sharing active!");
 
-        stream.getVideoTracks()[0].onended = () => {
+        const screenTrack = stream.getVideoTracks()[0];
+        
+        // Swap outgoing video track to the screen share track
+        if (peerConnectionRef.current && screenTrack) {
+          const transceivers = peerConnectionRef.current.getTransceivers();
+          const videoTransceiver = transceivers.find(t => t.receiver.track.kind === 'video' || (t.sender.track && t.sender.track.kind === 'video'));
+          if (videoTransceiver) {
+            videoTransceiver.direction = "sendrecv";
+            videoTransceiver.sender.replaceTrack(screenTrack);
+          } else {
+            peerConnectionRef.current.addTrack(screenTrack, stream);
+          }
+        }
+
+        screenTrack.onended = () => {
           setScreenStream(null);
           setIsScreenSharing(false);
+          // Restore local webcam track when ended natively
+          if (peerConnectionRef.current) {
+            const transceivers = peerConnectionRef.current.getTransceivers();
+            const videoTransceiver = transceivers.find(t => t.receiver.track.kind === 'video' || (t.sender.track && t.sender.track.kind === 'video'));
+            if (videoTransceiver) {
+              if (localStream) {
+                const videoTrack = localStream.getVideoTracks()[0];
+                if (videoTrack) {
+                  videoTransceiver.direction = "sendrecv";
+                  videoTransceiver.sender.replaceTrack(videoTrack);
+                }
+              } else {
+                videoTransceiver.direction = "recvonly";
+                videoTransceiver.sender.replaceTrack(null);
+              }
+            }
+          }
         };
       } catch (err) {
         console.error("Error starting display media:", err);
@@ -584,7 +640,7 @@ export default function VoIPCallPage() {
     }
   };
 
-  const endCall = () => {
+  const endCall = (sendLeaveSignal = true) => {
     stopRingtone();
     stopRecording();
     cleanupSignaling();
@@ -595,8 +651,18 @@ export default function VoIPCallPage() {
     setIsScreenSharing(false);
     setCallState("ended");
     
-    // Clear room signals from database to clear peer state
-    axiosInstance.post("/signal/clear", { roomName }).catch(err => {});
+    if (sendLeaveSignal) {
+      // Post leave signal containing local user name to let peer know who left
+      axiosInstance.post("/signal/post", {
+        roomName,
+        type: "leave",
+        sender: localSenderId.current,
+        data: { name: user?.name || "Friend" }
+      }).catch(err => {});
+
+      // Clear room signals from database to clear peer state
+      axiosInstance.post("/signal/clear", { roomName }).catch(err => {});
+    }
     
     // End chime (descending note sequence)
     playSynthesizedChime([392.00, 329.63, 261.63, 196.00], "sine", 0.22);
@@ -710,7 +776,7 @@ export default function VoIPCallPage() {
             <p className="text-xs text-orange-500 animate-pulse mt-2">☎️ Ringing...</p>
           </div>
 
-          <Button onClick={endCall} variant="destructive" className="px-8 py-3 rounded-xl font-bold mt-4 shadow-lg">
+          <Button onClick={() => endCall()} variant="destructive" className="px-8 py-3 rounded-xl font-bold mt-4 shadow-lg">
             Cancel Call
           </Button>
         </div>
@@ -1113,7 +1179,7 @@ export default function VoIPCallPage() {
             )}
 
             {/* HANG UP BUTTON */}
-            <Button onClick={endCall} variant="destructive" className="px-3 sm:px-5 rounded-xl h-9 sm:h-11 font-bold flex items-center gap-1.5 shadow-lg bg-red-600 hover:bg-red-550 text-xs sm:text-sm">
+            <Button onClick={() => endCall()} variant="destructive" className="px-3 sm:px-5 rounded-xl h-9 sm:h-11 font-bold flex items-center gap-1.5 shadow-lg bg-red-600 hover:bg-red-550 text-xs sm:text-sm">
               <PhoneOff className="w-4 h-4 sm:w-5 sm:h-5" />
               <span className="hidden sm:inline">Leave</span>
             </Button>
