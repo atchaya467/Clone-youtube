@@ -213,12 +213,27 @@ export default function VoIPCallPage() {
       // Update track in peer connection if active
       if (peerConnectionRef.current) {
         const videoTrack = stream.getVideoTracks()[0];
-        const senders = peerConnectionRef.current.getSenders();
-        const videoSender = senders.find(s => s.track && s.track.kind === 'video');
-        if (videoSender) {
-          videoSender.replaceTrack(videoTrack);
+        const audioTrack = stream.getAudioTracks()[0];
+        
+        // Find existing transceivers or add new ones
+        const transceivers = peerConnectionRef.current.getTransceivers();
+        
+        const videoTransceiver = transceivers.find(t => t.receiver.track.kind === 'video' || (t.sender.track && t.sender.track.kind === 'video'));
+        if (videoTransceiver) {
+          videoTransceiver.direction = "sendrecv";
+          videoTransceiver.sender.replaceTrack(videoTrack);
         } else {
           peerConnectionRef.current.addTrack(videoTrack, stream);
+        }
+
+        if (audioTrack) {
+          const audioTransceiver = transceivers.find(t => t.receiver.track.kind === 'audio' || (t.sender.track && t.sender.track.kind === 'audio'));
+          if (audioTransceiver) {
+            audioTransceiver.direction = "sendrecv";
+            audioTransceiver.sender.replaceTrack(audioTrack);
+          } else {
+            peerConnectionRef.current.addTrack(audioTrack, stream);
+          }
         }
       }
     } catch (err: any) {
@@ -232,10 +247,11 @@ export default function VoIPCallPage() {
         toast.success("Webcam connected (No audio device found)!");
         if (peerConnectionRef.current) {
           const videoTrack = stream.getVideoTracks()[0];
-          const senders = peerConnectionRef.current.getSenders();
-          const videoSender = senders.find(s => s.track && s.track.kind === 'video');
-          if (videoSender) {
-            videoSender.replaceTrack(videoTrack);
+          const transceivers = peerConnectionRef.current.getTransceivers();
+          const videoTransceiver = transceivers.find(t => t.receiver.track.kind === 'video' || (t.sender.track && t.sender.track.kind === 'video'));
+          if (videoTransceiver) {
+            videoTransceiver.direction = "sendrecv";
+            videoTransceiver.sender.replaceTrack(videoTrack);
           } else {
             peerConnectionRef.current.addTrack(videoTrack, stream);
           }
@@ -280,6 +296,10 @@ export default function VoIPCallPage() {
       // Add local audio/video tracks to peer connection
       if (localStream) {
         localStream.getTracks().forEach((track) => pc.addTrack(track, localStream));
+      } else {
+        // If webcam is blocked locally, request remote audio/video tracks anyway via transceivers
+        pc.addTransceiver("video", { direction: "recvonly" });
+        pc.addTransceiver("audio", { direction: "recvonly" });
       }
 
       // Handle ICE Candidates generated locally (upload to MongoDB signaling channel)
