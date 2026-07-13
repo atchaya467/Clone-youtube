@@ -480,25 +480,6 @@ export default function VoIPCallPage() {
       }
       setScreenStream(null);
       setIsScreenSharing(false);
-      
-      // Restore local webcam track in the peer connection
-      if (peerConnectionRef.current) {
-        const transceivers = peerConnectionRef.current.getTransceivers();
-        const videoTransceiver = transceivers.find(t => t.receiver.track.kind === 'video' || (t.sender.track && t.sender.track.kind === 'video'));
-        if (videoTransceiver) {
-          if (localStream) {
-            const videoTrack = localStream.getVideoTracks()[0];
-            if (videoTrack) {
-              videoTransceiver.direction = "sendrecv";
-              videoTransceiver.sender.replaceTrack(videoTrack);
-            }
-          } else {
-            // No webcam track available, fall back to recvonly
-            videoTransceiver.direction = "recvonly";
-            videoTransceiver.sender.replaceTrack(null);
-          }
-        }
-      }
       toast.info("Stopped screen sharing.");
     } else {
       try {
@@ -511,40 +492,9 @@ export default function VoIPCallPage() {
         setIsScreenSharing(true);
         toast.success("Screen sharing active!");
 
-        const screenTrack = stream.getVideoTracks()[0];
-        
-        // Swap outgoing video track to the screen share track
-        if (peerConnectionRef.current && screenTrack) {
-          const transceivers = peerConnectionRef.current.getTransceivers();
-          const videoTransceiver = transceivers.find(t => t.receiver.track.kind === 'video' || (t.sender.track && t.sender.track.kind === 'video'));
-          if (videoTransceiver) {
-            videoTransceiver.direction = "sendrecv";
-            videoTransceiver.sender.replaceTrack(screenTrack);
-          } else {
-            peerConnectionRef.current.addTrack(screenTrack, stream);
-          }
-        }
-
-        screenTrack.onended = () => {
+        stream.getVideoTracks()[0].onended = () => {
           setScreenStream(null);
           setIsScreenSharing(false);
-          // Restore local webcam track when ended natively
-          if (peerConnectionRef.current) {
-            const transceivers = peerConnectionRef.current.getTransceivers();
-            const videoTransceiver = transceivers.find(t => t.receiver.track.kind === 'video' || (t.sender.track && t.sender.track.kind === 'video'));
-            if (videoTransceiver) {
-              if (localStream) {
-                const videoTrack = localStream.getVideoTracks()[0];
-                if (videoTrack) {
-                  videoTransceiver.direction = "sendrecv";
-                  videoTransceiver.sender.replaceTrack(videoTrack);
-                }
-              } else {
-                videoTransceiver.direction = "recvonly";
-                videoTransceiver.sender.replaceTrack(null);
-              }
-            }
-          }
         };
       } catch (err) {
         console.error("Error starting display media:", err);
