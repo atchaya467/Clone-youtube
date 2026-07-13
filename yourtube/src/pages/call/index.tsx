@@ -72,7 +72,7 @@ export default function VoIPCallPage() {
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const localSenderId = useRef<string>(`peer_${Math.random().toString(36).substring(2, 9)}`);
   const pollingIntervalRef = useRef<any>(null);
-  const lastSeenTimeRef = useRef<number>(0);
+  const appliedSignalIds = useRef<Set<string>>(new Set());
   
   // Recording
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -269,24 +269,24 @@ export default function VoIPCallPage() {
         toast.success("Joined call room. Establishing connection...");
       }
 
-      // 3. Start database signaling polling loops
-      lastSeenTimeRef.current = Date.now();
+      // 3. Start database signaling polling loops tracking applied signal IDs
+      appliedSignalIds.current.clear();
       pollingIntervalRef.current = setInterval(async () => {
         try {
-          const res = await axiosInstance.get(`/signal/get?roomName=${roomName}&sender=${localSenderId.current}&lastSeenTime=${lastSeenTimeRef.current}`);
+          const res = await axiosInstance.get(`/signal/get?roomName=${roomName}&sender=${localSenderId.current}`);
           const newSignals = res.data.signals || [];
-          if (newSignals.length > 0) {
-            lastSeenTimeRef.current = Date.now();
-            for (const sig of newSignals) {
-              if (sig.type === "answer" && pc.signalingState === "have-local-offer") {
-                await pc.setRemoteDescription(new RTCSessionDescription(sig.data));
-                toast.success(`${friendName} joined the call!`);
-              } else if (sig.type === "candidate") {
-                try {
-                  await pc.addIceCandidate(new RTCIceCandidate(sig.data));
-                } catch (e) {
-                  console.warn("Failed to add ICE candidate:", e);
-                }
+          for (const sig of newSignals) {
+            if (appliedSignalIds.current.has(sig._id)) continue;
+            appliedSignalIds.current.add(sig._id);
+
+            if (sig.type === "answer" && pc.signalingState === "have-local-offer") {
+              await pc.setRemoteDescription(new RTCSessionDescription(sig.data));
+              toast.success(`${friendName} joined the call!`);
+            } else if (sig.type === "candidate") {
+              try {
+                await pc.addIceCandidate(new RTCIceCandidate(sig.data));
+              } catch (e) {
+                console.warn("Failed to add ICE candidate:", e);
               }
             }
           }
