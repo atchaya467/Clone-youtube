@@ -122,7 +122,6 @@ export default function VoIPCallPage() {
     }
   };
 
-  // Request camera and microphone stream on load
   const startLocalStream = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -132,8 +131,18 @@ export default function VoIPCallPage() {
       setLocalStream(stream);
       setUseMockLocalFeed(false);
     } catch (err) {
-      console.warn("webcam stream denied or not found:", err);
-      setUseMockLocalFeed(true);
+      console.warn("Could not get video and audio, trying video-only...", err);
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: false,
+        });
+        setLocalStream(stream);
+        setUseMockLocalFeed(false);
+      } catch (err2) {
+        console.warn("Webcam and mic both unavailable. Running in Call Simulation mode.", err2);
+        setUseMockLocalFeed(true);
+      }
     }
   };
 
@@ -700,13 +709,23 @@ export default function VoIPCallPage() {
                     });
                     setLocalStream(stream);
                     setUseMockLocalFeed(false);
-                    toast.success("Webcam connected!");
+                    toast.success("Webcam connected successfully!");
                   } catch (err: any) {
-                    toast.error(`Webcam error: ${err.message || err}`);
+                    try {
+                      const stream = await navigator.mediaDevices.getUserMedia({
+                        video: true,
+                        audio: false,
+                      });
+                      setLocalStream(stream);
+                      setUseMockLocalFeed(false);
+                      toast.success("Webcam connected (No audio device found)!");
+                    } catch (err2: any) {
+                      toast.error(`Webcam error: ${err2.message || err2}`);
+                    }
                   }
                 } else {
                   setUseMockLocalFeed(true);
-                  toast.info("Switched to simulator loop.");
+                  toast.info("Switched to simulated camera feed.");
                 }
               }}
               className={`p-3 rounded-xl w-11 h-11 ${!useMockLocalFeed ? "bg-orange-600 hover:bg-orange-550 text-white" : "bg-slate-800 hover:bg-slate-750 text-slate-200"}`}
