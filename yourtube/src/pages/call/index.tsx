@@ -521,7 +521,7 @@ export default function VoIPCallPage() {
   };
 
   return (
-    <div className="h-screen w-full bg-slate-955 text-slate-100 flex flex-col justify-between overflow-hidden relative">
+    <div className="h-screen w-full bg-slate-950 text-slate-100 flex flex-col justify-between overflow-hidden relative">
       
       {/* 1. MOCK INCOMING SETUP VIEW */}
       {callState === "idle" && (
