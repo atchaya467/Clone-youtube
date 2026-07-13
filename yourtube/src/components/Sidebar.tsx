@@ -23,7 +23,7 @@ const Sidebar = () => {
 
   const [isdialogeopen, setisdialogeopen] = useState(false);
   return (
-    <aside className="w-64 bg-white dark:bg-slate-900 border-r dark:border-slate-850 min-h-screen p-2 flex flex-col justify-between dark:text-white transition-colors duration-200">
+    <aside className="hidden md:flex w-64 bg-white dark:bg-slate-900 border-r dark:border-slate-850 min-h-screen p-2 flex-col justify-between dark:text-white transition-colors duration-200">
       <nav className="space-y-1 flex-1">
         <Link href="/">
           <Button variant="ghost" className="w-full justify-start">

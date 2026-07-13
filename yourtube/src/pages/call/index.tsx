@@ -512,7 +512,7 @@ export default function VoIPCallPage() {
   };
 
   return (
-    <div className="h-screen bg-slate-955 text-slate-100 flex flex-col justify-between overflow-hidden relative">
+    <div className="h-screen w-full bg-slate-955 text-slate-100 flex flex-col justify-between overflow-hidden relative">
       
       {/* 1. MOCK INCOMING SETUP VIEW */}
       {callState === "idle" && (
@@ -649,7 +649,7 @@ export default function VoIPCallPage() {
 
             {/* FLOATING LOCAL VIDEO PiP WINDOW */}
             {isPipFloating && (
-              <div className="absolute top-6 right-6 w-48 aspect-video bg-slate-900 rounded-2xl overflow-hidden border border-slate-750 shadow-2xl z-20 transition-all duration-300">
+              <div className="absolute top-4 right-4 w-28 sm:w-48 aspect-video bg-slate-900 rounded-2xl overflow-hidden border border-slate-750 shadow-2xl z-20 transition-all duration-300">
                 {isVideoOff ? (
                   <div className="w-full h-full flex flex-col items-center justify-center text-slate-500 bg-slate-950">
                     <VideoOff className="w-6 h-6" />
@@ -682,7 +682,7 @@ export default function VoIPCallPage() {
 
             {/* IF SCREEN IS SHARING: DISPLAY REMOTE USER PiP TOO */}
             {isScreenSharing && (
-              <div className="absolute top-6 left-6 w-44 aspect-video bg-slate-900 rounded-2xl overflow-hidden border border-slate-750 shadow-2xl z-20">
+              <div className="absolute top-4 left-4 w-24 sm:w-44 aspect-video bg-slate-900 rounded-2xl overflow-hidden border border-slate-750 shadow-2xl z-20">
                 {remoteStream ? (
                   <video
                     ref={setRemoteVideoRef}
@@ -718,7 +718,7 @@ export default function VoIPCallPage() {
 
           {/* RIGHT SIDEBAR: CHAT PANEL */}
           {isChatOpen && (
-            <div className="w-80 bg-slate-900 border-l border-slate-800 flex flex-col justify-between h-full z-10">
+            <div className="w-full md:w-80 absolute md:relative right-0 top-0 bottom-0 bg-slate-900 border-l border-slate-800 flex flex-col justify-between h-full z-30">
               {/* Chat Header */}
               <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-900">
                 <div className="flex items-center gap-2 text-white font-bold text-sm">
@@ -803,7 +803,7 @@ export default function VoIPCallPage() {
           </div>
 
           {/* CENTER: INTERACTIVE SYSTEM CONTROLS */}
-          <div className="flex items-center gap-3 mx-auto md:mx-0">
+          <div className="flex items-center gap-1.5 sm:gap-3 mx-auto md:mx-0">
             {/* Mic Button */}
             <Button 
               onClick={() => {
@@ -818,10 +818,10 @@ export default function VoIPCallPage() {
                   setIsMuted(!isMuted);
                 }
               }}
-              className={`p-3 rounded-xl w-11 h-11 ${isMuted ? "bg-red-600 hover:bg-red-500 text-white" : "bg-slate-800 hover:bg-slate-750 text-slate-200"}`}
+              className={`p-2 sm:p-3 rounded-xl w-9 h-9 sm:w-11 sm:h-11 ${isMuted ? "bg-red-600 hover:bg-red-500 text-white" : "bg-slate-800 hover:bg-slate-750 text-slate-200"}`}
               title={isMuted ? "Unmute Mic" : "Mute Mic"}
             >
-              {isMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+              {isMuted ? <MicOff className="w-4 h-4 sm:w-5 sm:h-5" /> : <Mic className="w-4 h-4 sm:w-5 sm:h-5" />}
             </Button>
 
             {/* Video Toggle */}
@@ -838,10 +838,10 @@ export default function VoIPCallPage() {
                   setIsVideoOff(!isVideoOff);
                 }
               }}
-              className={`p-3 rounded-xl w-11 h-11 ${isVideoOff ? "bg-red-600 hover:bg-red-500 text-white" : "bg-slate-800 hover:bg-slate-750 text-slate-200"}`}
+              className={`p-2 sm:p-3 rounded-xl w-9 h-9 sm:w-11 sm:h-11 ${isVideoOff ? "bg-red-600 hover:bg-red-500 text-white" : "bg-slate-800 hover:bg-slate-750 text-slate-200"}`}
               title={isVideoOff ? "Turn Video On" : "Turn Video Off"}
             >
-              {isVideoOff ? <VideoOff className="w-5 h-5" /> : <Video className="w-5 h-5" />}
+              {isVideoOff ? <VideoOff className="w-4 h-4 sm:w-5 sm:h-5" /> : <Video className="w-4 h-4 sm:w-5 sm:h-5" />}
             </Button>
 
             {/* Camera Simulation Swap button */}
@@ -874,54 +874,54 @@ export default function VoIPCallPage() {
                   toast.info("Switched to simulated camera feed.");
                 }
               }}
-              className={`p-3 rounded-xl w-11 h-11 ${!useMockLocalFeed ? "bg-orange-600 hover:bg-orange-550 text-white" : "bg-slate-800 hover:bg-slate-750 text-slate-200"}`}
+              className={`p-2 sm:p-3 rounded-xl w-9 h-9 sm:w-11 sm:h-11 ${!useMockLocalFeed ? "bg-orange-600 hover:bg-orange-550 text-white" : "bg-slate-800 hover:bg-slate-755 text-slate-200"}`}
               title={useMockLocalFeed ? "Force Real Webcam" : "Swap to Simulator"}
             >
-              <Camera className="w-5 h-5" />
+              <Camera className="w-4 h-4 sm:w-5 sm:h-5" />
             </Button>
 
             {/* Screen Share button */}
             <Button 
               onClick={toggleScreenShare}
-              className={`p-3 rounded-xl w-11 h-11 ${isScreenSharing ? "bg-emerald-600 hover:bg-emerald-500 text-white" : "bg-slate-800 hover:bg-slate-755 text-slate-200"}`}
+              className={`p-2 sm:p-3 rounded-xl w-9 h-9 sm:w-11 sm:h-11 ${isScreenSharing ? "bg-emerald-600 hover:bg-emerald-500 text-white" : "bg-slate-800 hover:bg-slate-755 text-slate-200"}`}
               title="Share Screen"
             >
-              <Monitor className="w-5 h-5" />
+              <Monitor className="w-4 h-4 sm:w-5 sm:h-5" />
             </Button>
 
             {/* Session Recording button */}
             {isRecording ? (
-              <Button onClick={stopRecording} className="p-3 bg-red-600 hover:bg-red-500 text-white rounded-xl w-11 h-11" title="Stop Recording">
+              <Button onClick={stopRecording} className="p-2 sm:p-3 bg-red-600 hover:bg-red-500 text-white rounded-xl w-9 h-9 sm:w-11 sm:h-11" title="Stop Recording">
                 <Square className="w-4 h-4 fill-white" />
               </Button>
             ) : (
-              <Button onClick={startRecording} className="p-3 bg-slate-800 hover:bg-slate-750 text-slate-200 rounded-xl w-11 h-11" title="Record Meeting">
+              <Button onClick={startRecording} className="p-2 sm:p-3 bg-slate-800 hover:bg-slate-750 text-slate-200 rounded-xl w-9 h-9 sm:w-11 sm:h-11" title="Record Meeting">
                 <Circle className="w-3.5 h-3.5 fill-red-500 text-red-500" />
               </Button>
             )}
 
             {/* HANG UP BUTTON */}
-            <Button onClick={endCall} variant="destructive" className="px-5 rounded-xl h-11 font-bold flex items-center gap-1.5 shadow-lg bg-red-600 hover:bg-red-550">
-              <PhoneOff className="w-5 h-5" />
+            <Button onClick={endCall} variant="destructive" className="px-3 sm:px-5 rounded-xl h-9 sm:h-11 font-bold flex items-center gap-1.5 shadow-lg bg-red-600 hover:bg-red-550 text-xs sm:text-sm">
+              <PhoneOff className="w-4 h-4 sm:w-5 sm:h-5" />
               <span className="hidden sm:inline">Leave</span>
             </Button>
           </div>
 
           {/* RIGHT: CHAT AND PANEL TOGGLES */}
-          <div className="hidden md:flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             <Button 
               onClick={() => setIsChatOpen(!isChatOpen)}
-              className={`p-3 rounded-xl w-11 h-11 ${isChatOpen ? "bg-orange-600 text-white hover:bg-orange-500" : "bg-slate-800 hover:bg-slate-750 text-slate-200"}`}
+              className={`p-2 sm:p-3 rounded-xl w-9 h-9 sm:w-11 sm:h-11 ${isChatOpen ? "bg-orange-600 text-white hover:bg-orange-500" : "bg-slate-800 hover:bg-slate-750 text-slate-200"}`}
               title="Toggle Chat"
             >
-              <MessageSquare className="w-5 h-5" />
+              <MessageSquare className="w-4 h-4 sm:w-5 sm:h-5" />
             </Button>
             <Button 
               onClick={() => setIsPipFloating(!isPipFloating)}
-              className={`p-3 rounded-xl w-11 h-11 ${isPipFloating ? "bg-orange-600 text-white hover:bg-orange-500" : "bg-slate-800 hover:bg-slate-750 text-slate-200"}`}
+              className={`p-2 sm:p-3 rounded-xl w-9 h-9 sm:w-11 sm:h-11 ${isPipFloating ? "bg-orange-600 text-white hover:bg-orange-500" : "bg-slate-800 hover:bg-slate-750 text-slate-200"}`}
               title="Toggle Your PiP View"
             >
-              <Tv className="w-5 h-5" />
+              <Tv className="w-4 h-4 sm:w-5 sm:h-5" />
             </Button>
           </div>
 
