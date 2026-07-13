@@ -11,16 +11,27 @@ import {
   PhoneOff, 
   Circle, 
   Download, 
-  Play, 
-  Plus, 
   Users, 
   Tv, 
-  Info,
   Square,
-  Camera
+  Camera,
+  MessageSquare,
+  Send,
+  X,
+  Volume2,
+  VolumeX,
+  Settings,
+  PhoneCall,
+  Sparkles
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+
+interface ChatMessage {
+  sender: string;
+  text: string;
+  time: string;
+}
 
 export default function VoIPCallPage() {
   const { user } = useUser();
@@ -28,13 +39,23 @@ export default function VoIPCallPage() {
   const [roomName, setRoomName] = useState("");
   const [friendName, setFriendName] = useState("");
   
-  // Device toggle states
+  // Device & HUD states
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [useMockLocalFeed, setUseMockLocalFeed] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [isPipFloating, setIsPipFloating] = useState(true);
+  
+  // Speakers talking animation state
+  const [isFriendSpeaking, setIsFriendSpeaking] = useState(false);
+  const [isLocalSpeaking, setIsLocalSpeaking] = useState(false);
+
+  // Chat message logs
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [newMessage, setNewMessage] = useState("");
 
   // Streams
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
@@ -42,7 +63,90 @@ export default function VoIPCallPage() {
   
   // Refs
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const ringtoneIntervalRef = useRef<any>(null);
   
+  // Recording
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordedChunksRef = useRef<Blob[]>([]);
+  const recordingIntervalRef = useRef<any>(null);
+
+  // Audio chimes synthesiser using Web Audio API
+  const playSynthesizedChime = (notes: number[], type: OscillatorType = "sine", duration = 0.15) => {
+    try {
+      if (!audioContextRef.current) {
+        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      }
+      const ctx = audioContextRef.current;
+      if (ctx.state === "suspended") {
+        ctx.resume();
+      }
+
+      let time = ctx.currentTime;
+      notes.forEach((freq) => {
+        const osc = ctx.createOscillator();
+        const gainNode = ctx.createGain();
+        osc.connect(gainNode);
+        gainNode.connect(ctx.destination);
+
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, time);
+
+        gainNode.gain.setValueAtTime(0.12, time);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, time + duration);
+
+        osc.start(time);
+        osc.stop(time + duration);
+        time += duration * 0.8;
+      });
+    } catch (e) {
+      console.warn("Audio Context is blocked or not supported on this browser.", e);
+    }
+  };
+
+  // Ringtone generator during outgoing call
+  const startRingtone = () => {
+    stopRingtone();
+    ringtoneIntervalRef.current = setInterval(() => {
+      // Classic dual-tone telephone ringing frequency (440Hz + 480Hz)
+      playSynthesizedChime([440, 480], "sine", 0.3);
+      setTimeout(() => {
+        playSynthesizedChime([440, 480], "sine", 0.3);
+      }, 400);
+    }, 2000);
+  };
+
+  const stopRingtone = () => {
+    if (ringtoneIntervalRef.current) {
+      clearInterval(ringtoneIntervalRef.current);
+    }
+  };
+
+  // Request camera and microphone stream on load
+  const startLocalStream = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: true,
+      });
+      setLocalStream(stream);
+      setUseMockLocalFeed(false);
+    } catch (err) {
+      console.warn("webcam stream denied or not found:", err);
+      setUseMockLocalFeed(true);
+    }
+  };
+
+  useEffect(() => {
+    startLocalStream();
+    return () => {
+      stopRingtone();
+      if (localStream) {
+        localStream.getTracks().forEach((track) => track.stop());
+      }
+    };
+  }, []);
+
   // Callback Refs to guarantee immediate srcObject binding
   const setLocalVideoRef = (el: HTMLVideoElement | null) => {
     if (el && localStream) {
@@ -55,39 +159,6 @@ export default function VoIPCallPage() {
       el.srcObject = screenStream;
     }
   };
-  
-  // Recording
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const recordedChunksRef = useRef<Blob[]>([]);
-  const recordingIntervalRef = useRef<any>(null);
-
-  // Request camera and microphone stream on load
-  const startLocalStream = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: true,
-        audio: true,
-      });
-      setLocalStream(stream);
-      setUseMockLocalFeed(false);
-    } catch (err) {
-      console.error("Error accessing camera/microphone:", err);
-      setUseMockLocalFeed(true);
-      toast.warning("Camera permission blocked or unavailable. Running in Call Simulation mode.");
-    }
-  };
-
-  useEffect(() => {
-    startLocalStream();
-    return () => {
-      // Clean up local streams on unmount
-      if (localStream) {
-        localStream.getTracks().forEach((track) => track.stop());
-      }
-    };
-  }, []);
-
-  // Stream update bindings are handled directly by callback refs
 
   // Initiate call
   const startCall = async () => {
@@ -98,18 +169,56 @@ export default function VoIPCallPage() {
 
     setCallState("calling");
     toast.info(`Calling ${friendName}...`);
+    startRingtone();
 
     // Simulate connection delay
     setTimeout(() => {
+      stopRingtone();
       setCallState("connected");
-      toast.success(`Connected to VoIP call in room: ${roomName}`);
-    }, 2000);
+      // Connected chime (ascending major chord)
+      playSynthesizedChime([261.63, 329.63, 392.00, 523.25], "triangle", 0.18);
+      toast.success(`Connected to VoIP call with ${friendName}`);
+      
+      // Simulate chat greetings from friend
+      setTimeout(() => {
+        setChatMessages((prev) => [
+          ...prev,
+          {
+            sender: friendName,
+            text: `Hey! I'm in room ${roomName}. Ready to share screen and watch YouTube?`,
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          }
+        ]);
+      }, 1500);
+    }, 2800);
   };
+
+  // Simulate speaking indicator loops
+  useEffect(() => {
+    if (callState !== "connected") return;
+    
+    // Simulate remote friend speaking occasionally
+    const interval = setInterval(() => {
+      setIsFriendSpeaking(Math.random() > 0.6);
+    }, 1800);
+
+    return () => clearInterval(interval);
+  }, [callState]);
+
+  useEffect(() => {
+    if (callState !== "connected") return;
+    
+    // Simulate local user speaking indicator if not muted
+    const interval = setInterval(() => {
+      setIsLocalSpeaking(!isMuted && Math.random() > 0.7);
+    }, 1500);
+
+    return () => clearInterval(interval);
+  }, [callState, isMuted]);
 
   // Screen sharing (YouTube tab / window)
   const toggleScreenShare = async () => {
     if (isScreenSharing) {
-      // Stop sharing
       if (screenStream) {
         screenStream.getTracks().forEach((track) => track.stop());
       }
@@ -118,40 +227,36 @@ export default function VoIPCallPage() {
       toast.info("Stopped screen sharing.");
     } else {
       try {
-        toast.info("Please select the tab/window containing YouTube to share.");
+        toast.info("Please select the tab containing YouTube to watch together.");
         const stream = await navigator.mediaDevices.getDisplayMedia({
           video: true,
           audio: true,
         });
         setScreenStream(stream);
         setIsScreenSharing(true);
-        toast.success("Screen sharing active! Sharing YouTube stream.");
+        toast.success("Screen sharing active!");
 
-        // Automatically bind stream ended event (e.g. if user clicks 'Stop sharing' banner)
         stream.getVideoTracks()[0].onended = () => {
           setScreenStream(null);
           setIsScreenSharing(false);
         };
       } catch (err) {
         console.error("Error starting display media:", err);
-        toast.error("Screen sharing cancelled or failed.");
+        toast.error("Screen sharing cancelled.");
       }
     }
   };
 
-  // Screen share update bindings are handled directly by callback refs
-
   // Start Call Recording
   const startRecording = () => {
     recordedChunksRef.current = [];
-    
-    // Collect all tracks to record
     const tracksToRecord: MediaStreamTrack[] = [];
+    
     if (localStream) {
       localStream.getTracks().forEach((t) => tracksToRecord.push(t));
     }
     
-    // Fallback: if camera is blocked/mock mode, capture stream from the remote video element
+    // Fallback: capture from remote snowglobe element if webcam is blocked
     if (tracksToRecord.length === 0 && remoteVideoRef.current) {
       try {
         const remoteEl = remoteVideoRef.current as any;
@@ -160,7 +265,7 @@ export default function VoIPCallPage() {
           captureStream.getTracks().forEach((t: any) => tracksToRecord.push(t));
         }
       } catch (err) {
-        console.error("Error capturing remote stream fallback:", err);
+        console.error("Error capturing remote stream:", err);
       }
     }
 
@@ -169,7 +274,7 @@ export default function VoIPCallPage() {
     }
 
     if (tracksToRecord.length === 0) {
-      toast.error("No active video/audio stream available to record.");
+      toast.error("No active stream found to record.");
       return;
     }
 
@@ -186,14 +291,11 @@ export default function VoIPCallPage() {
       };
 
       mediaRecorder.onstop = () => {
-        // Trigger file download on stop
-        const blob = new Blob(recordedChunksRef.current, {
-          type: "video/webm",
-        });
+        const blob = new Blob(recordedChunksRef.current, { type: "video/webm" });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        a.download = `voip_call_${roomName || "recording"}_${Date.now()}.webm`;
+        a.download = `call_session_${roomName || "recording"}_${Date.now()}.webm`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -202,7 +304,7 @@ export default function VoIPCallPage() {
       };
 
       mediaRecorderRef.current = mediaRecorder;
-      mediaRecorder.start(1000); // chunk every second
+      mediaRecorder.start(1000);
       setIsRecording(true);
       setRecordingTime(0);
       toast.success("Recording session started.");
@@ -216,7 +318,6 @@ export default function VoIPCallPage() {
     }
   };
 
-  // Stop Call Recording
   const stopRecording = () => {
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop();
@@ -228,6 +329,7 @@ export default function VoIPCallPage() {
   };
 
   const endCall = () => {
+    stopRingtone();
     stopRecording();
     if (screenStream) {
       screenStream.getTracks().forEach((t) => t.stop());
@@ -235,6 +337,8 @@ export default function VoIPCallPage() {
     setScreenStream(null);
     setIsScreenSharing(false);
     setCallState("ended");
+    // End chime (descending note sequence)
+    playSynthesizedChime([392.00, 329.63, 261.63, 196.00], "sine", 0.22);
     toast.error("Call ended.");
   };
 
@@ -242,310 +346,423 @@ export default function VoIPCallPage() {
     setCallState("idle");
     setRoomName("");
     setFriendName("");
+    setChatMessages([]);
+  };
+
+  // Handle message send in chat
+  const handleSendMessage = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newMessage.trim()) return;
+
+    setChatMessages((prev) => [
+      ...prev,
+      {
+        sender: user?.name || "You",
+        text: newMessage.trim(),
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      }
+    ]);
+    setNewMessage("");
+
+    // Simulate simulated friend replying in 1.5 seconds
+    setTimeout(() => {
+      setChatMessages((prev) => [
+        ...prev,
+        {
+          sender: friendName || "Friend",
+          text: "Yeah, this looks awesome! The lag is very low.",
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        }
+      ]);
+    }, 1500);
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col justify-between p-6">
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-between overflow-hidden relative">
       
-      {/* HEADER SECTION */}
-      <div className="flex justify-between items-center border-b border-slate-800 pb-4 mb-4">
-        <div>
-          <h1 className="text-2xl font-black text-white flex items-center gap-2">
-            <Video className="w-6 h-6 text-orange-500" />
-            VoIP Video Call & Party
-          </h1>
-          <p className="text-xs text-slate-400">
-            Real-time WebRTC collaborative video communication, YouTube screen share, and call recorder
-          </p>
-        </div>
-        
-        {isRecording && (
-          <div className="flex items-center gap-2 bg-red-950/60 border border-red-800 px-3 py-1.5 rounded-full text-xs font-bold text-red-400 animate-pulse">
-            <Circle className="w-3 h-3 fill-red-500 text-red-500" />
-            <span>REC • {new Date(recordingTime * 1000).toISOString().substr(14, 5)}</span>
-          </div>
-        )}
-      </div>
-
-      {/* MAIN CALL PANEL */}
-      <div className="flex-1 grid grid-cols-1 lg:grid-cols-4 gap-6 min-h-[500px]">
-        
-        {/* LEFT COLUMN: CALL CONTROLLER (IF IDLE) */}
-        {callState === "idle" && (
-          <div className="lg:col-span-1 bg-slate-950 p-6 rounded-2xl border border-slate-800 flex flex-col justify-between">
-            <div className="space-y-4">
-              <div className="flex items-center gap-2 text-orange-500 font-bold mb-2">
-                <Users className="w-5 h-5" />
-                <span>Call Setup</span>
+      {/* 1. MOCK INCOMING SETUP VIEW */}
+      {callState === "idle" && (
+        <div className="flex-1 flex items-center justify-center p-6 relative">
+          <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-8 shadow-2xl relative overflow-hidden">
+            <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-orange-500 via-red-500 to-pink-600 animate-pulse" />
+            
+            <div className="flex flex-col items-center text-center space-y-4 mb-8">
+              <div className="w-16 h-16 bg-orange-500/10 text-orange-500 rounded-full flex items-center justify-center">
+                <Video className="w-8 h-8" />
               </div>
-              
               <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Room Code</label>
+                <h1 className="text-2xl font-black text-white">Join VoIP Video Call</h1>
+                <p className="text-xs text-slate-400 mt-1">Start watch party calls with live screen share and recording</p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-[10px] font-extrabold uppercase tracking-wider text-slate-400 mb-1">Room Code</label>
                 <input
                   type="text"
                   placeholder="e.g. party-room-101"
                   value={roomName}
                   onChange={(e) => setRoomName(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl border border-slate-800 bg-slate-900 text-white focus:outline-none focus:border-orange-500 text-sm font-semibold"
+                  className="w-full px-4 py-3 rounded-xl border border-slate-850 bg-slate-950 text-white focus:outline-none focus:border-orange-500 text-sm font-semibold transition-all duration-200"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Friend's Name</label>
+                <label className="block text-[10px] font-extrabold uppercase tracking-wider text-slate-400 mb-1">Friend's Name</label>
                 <input
                   type="text"
-                  placeholder="e.g. Atchaya"
+                  placeholder="e.g. Nisha"
                   value={friendName}
                   onChange={(e) => setFriendName(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl border border-slate-800 bg-slate-900 text-white focus:outline-none focus:border-orange-500 text-sm font-semibold"
+                  className="w-full px-4 py-3 rounded-xl border border-slate-850 bg-slate-950 text-white focus:outline-none focus:border-orange-500 text-sm font-semibold transition-all duration-200"
                 />
               </div>
-            </div>
 
-            <Button 
-              onClick={startCall}
-              className="w-full py-4 bg-orange-600 hover:bg-orange-500 text-white font-bold rounded-xl shadow-lg mt-6"
-            >
-              Start Video Call
-            </Button>
+              <Button 
+                onClick={startCall}
+                className="w-full py-4 bg-orange-600 hover:bg-orange-500 text-white font-bold rounded-xl shadow-lg mt-6 flex items-center justify-center gap-2"
+              >
+                <PhoneCall className="w-5 h-5" />
+                <span>Start Call Room</span>
+              </Button>
+            </div>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* LEFT COLUMN: CALL CONTROLLER (IF CALLING) */}
-        {callState === "calling" && (
-          <div className="lg:col-span-1 bg-slate-950 p-6 rounded-2xl border border-slate-800 flex flex-col items-center justify-center text-center space-y-6">
-            <div className="relative">
-              <div className="w-20 h-20 bg-orange-500/20 text-orange-500 rounded-full flex items-center justify-center animate-ping absolute inset-0" />
-              <Video className="w-16 h-16 text-orange-500 relative z-10 animate-bounce" />
+      {/* 2. CALLING / RINGING VIEW */}
+      {callState === "calling" && (
+        <div className="flex-1 flex flex-col items-center justify-center p-6 space-y-6">
+          <div className="relative">
+            <div className="w-24 h-24 bg-orange-500/20 text-orange-500 rounded-full flex items-center justify-center animate-ping absolute inset-0" />
+            <div className="w-24 h-24 bg-slate-900 border border-slate-800 rounded-full flex items-center justify-center relative z-10">
+              <Video className="w-10 h-10 text-orange-500 animate-pulse" />
             </div>
-            <div className="space-y-1">
-              <h3 className="text-xl font-bold text-white">Calling {friendName}...</h3>
-              <p className="text-xs text-slate-400">Connecting WebRTC SDP signal in room {roomName}</p>
-            </div>
-            <Button onClick={endCall} variant="destructive" className="w-full py-3 rounded-xl font-semibold">
-              Cancel Call
-            </Button>
           </div>
-        )}
+          
+          <div className="text-center space-y-1">
+            <h3 className="text-2xl font-black text-white">Calling {friendName}...</h3>
+            <p className="text-sm text-slate-400">Initiating WebRTC handshake in room {roomName}</p>
+            <p className="text-xs text-orange-500 animate-pulse mt-2">☎️ Ringing...</p>
+          </div>
 
-        {/* LEFT COLUMN: ACTIVE CONTROL STEPS (IF CONNECTED) */}
-        {callState === "connected" && (
-          <div className="lg:col-span-1 bg-slate-950 p-6 rounded-2xl border border-slate-800 flex flex-col justify-between">
-            <div className="space-y-4">
-              <div className="flex items-center gap-2 text-emerald-500 font-bold mb-2">
-                <Users className="w-5 h-5" />
-                <span>Call Active</span>
-              </div>
-              <div className="p-3 bg-slate-900 rounded-xl border border-slate-850 text-xs space-y-1 text-slate-300">
-                <p>📍 Room: <strong className="text-white">{roomName}</strong></p>
-                <p>👤 Connected to: <strong className="text-white">{friendName}</strong></p>
-                <p>⚡ Status: <strong className="text-emerald-400">Direct WebRTC Link</strong></p>
-              </div>
+          <Button onClick={endCall} variant="destructive" className="px-8 py-3 rounded-xl font-bold mt-4 shadow-lg">
+            Cancel Call
+          </Button>
+        </div>
+      )}
 
-              {/* Shared YouTube instructions */}
-              <div className="p-4 bg-orange-950/20 border border-orange-900/60 rounded-xl space-y-2">
-                <div className="flex items-center gap-1.5 text-xs text-orange-400 font-bold">
-                  <Tv className="w-4 h-4" />
-                  <span>Shared YouTube Screen</span>
+      {/* 3. ACTIVE CONNECTED MEET VIEW */}
+      {callState === "connected" && (
+        <div className="flex-1 flex flex-row relative h-[calc(100vh-88px)]">
+          
+          {/* THE MAIN VIDEO CANVAS AREA */}
+          <div className="flex-1 bg-slate-950 relative overflow-hidden flex items-center justify-center">
+            
+            {/* BACKGROUND: REMOTE PEER VIDEO (OR SCREEN SHARE FEED) */}
+            <div className="absolute inset-0 z-0">
+              {isScreenSharing && screenStream ? (
+                // Screen share is active, remote feed moves to floating PiP, screen share takes main background
+                <video 
+                  ref={setScreenVideoRef}
+                  autoPlay 
+                  playsInline 
+                  className="w-full h-full object-contain bg-black"
+                />
+              ) : (
+                // Normal view: remote video loop occupies the full screen
+                <video
+                  ref={remoteVideoRef}
+                  autoPlay
+                  playsInline
+                  loop
+                  muted
+                  src="/video/vdo.mp4"
+                  className="w-full h-full object-cover"
+                />
+              )}
+            </div>
+
+            {/* NAME TAG & MIC STATE OVERLAY (REMOTE PEER) */}
+            <div className="absolute bottom-6 left-6 z-10 flex items-center gap-3 bg-black/60 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-slate-850">
+              <div className="relative">
+                {isFriendSpeaking && (
+                  <span className="absolute -inset-1 rounded-full bg-emerald-500/40 animate-ping" />
+                )}
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black text-white ${isFriendSpeaking ? "bg-emerald-600" : "bg-blue-600"}`}>
+                  {friendName.charAt(0).toUpperCase()}
                 </div>
-                <p className="text-[11px] text-slate-350 leading-relaxed">
-                  Click **Share Screen** and select your current browser tab containing your **YouTube Clone** to watch and discuss videos together in real time!
-                </p>
               </div>
-
-              {/* Recorder info */}
-              <div className="p-4 bg-slate-900 rounded-xl space-y-2 text-xs">
-                <div className="flex items-center gap-1.5 font-bold text-white">
-                  <Download className="w-4 h-4 text-orange-500" />
-                  <span>Call Recorder</span>
+              <div>
+                <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                  <span>{isScreenSharing ? `${friendName} (Screen Shared)` : friendName}</span>
+                  {isFriendSpeaking && <Volume2 className="w-3.5 h-3.5 text-emerald-400 animate-bounce" />}
                 </div>
-                <p className="text-[11px] text-slate-400">
-                  Record your calling session. Once stopped, the video will be automatically compiled and saved directly onto your device.
-                </p>
-                {isRecording ? (
-                  <Button onClick={stopRecording} size="sm" variant="destructive" className="w-full flex items-center gap-1.5 rounded-lg">
-                    <Square className="w-3.5 h-3.5 fill-white" />
-                    Stop Recording
-                  </Button>
+                <span className="text-[10px] text-slate-400">Remote Participant</span>
+              </div>
+            </div>
+
+            {/* FLOATING LOCAL VIDEO PiP WINDOW */}
+            {isPipFloating && (
+              <div className="absolute top-6 right-6 w-48 aspect-video bg-slate-900 rounded-2xl overflow-hidden border border-slate-750 shadow-2xl z-20 transition-all duration-300">
+                {isVideoOff ? (
+                  <div className="w-full h-full flex flex-col items-center justify-center text-slate-500 bg-slate-950">
+                    <VideoOff className="w-6 h-6" />
+                    <span className="text-[9px] font-bold mt-1">Camera Off</span>
+                  </div>
+                ) : useMockLocalFeed ? (
+                  <video 
+                    src="/video/vdo.mp4"
+                    autoPlay 
+                    playsInline 
+                    loop
+                    muted 
+                    className="w-full h-full object-cover mirror"
+                  />
                 ) : (
-                  <Button onClick={startRecording} size="sm" variant="secondary" className="w-full bg-slate-800 hover:bg-slate-700 text-white flex items-center gap-1.5 rounded-lg">
-                    <Circle className="w-3 h-3 fill-red-500 text-red-500" />
-                    Record Session
-                  </Button>
+                  <video 
+                    ref={setLocalVideoRef} 
+                    autoPlay 
+                    playsInline 
+                    muted 
+                    className="w-full h-full object-cover mirror"
+                  />
+                )}
+                <div className="absolute bottom-2 left-2 bg-black/70 px-2 py-0.5 rounded-lg text-[9px] font-extrabold text-white flex items-center gap-1">
+                  <div className={`w-1.5 h-1.5 rounded-full ${isLocalSpeaking ? "bg-emerald-500 animate-pulse" : "bg-orange-500"}`} />
+                  <span>You</span>
+                </div>
+              </div>
+            )}
+
+            {/* IF SCREEN IS SHARING: DISPLAY REMOTE USER PiP TOO */}
+            {isScreenSharing && (
+              <div className="absolute top-6 left-6 w-44 aspect-video bg-slate-900 rounded-2xl overflow-hidden border border-slate-750 shadow-2xl z-20">
+                <video
+                  autoPlay
+                  playsInline
+                  loop
+                  muted
+                  src="/video/vdo.mp4"
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute bottom-2 left-2 bg-black/70 px-2 py-0.5 rounded-lg text-[9px] font-extrabold text-white">
+                  <span>{friendName}</span>
+                </div>
+              </div>
+            )}
+
+            {/* RECORDING / REC PULSING OVERLAY */}
+            {isRecording && (
+              <div className="absolute top-6 left-6 z-20 flex items-center gap-2 bg-red-950/80 border border-red-800 px-3 py-1.5 rounded-full text-[10px] font-bold text-red-400 animate-pulse">
+                <Circle className="w-2.5 h-2.5 fill-red-500 text-red-500" />
+                <span>REC • {new Date(recordingTime * 1000).toISOString().substr(14, 5)}</span>
+              </div>
+            )}
+
+          </div>
+
+          {/* RIGHT SIDEBAR: CHAT PANEL */}
+          {isChatOpen && (
+            <div className="w-80 bg-slate-900 border-l border-slate-800 flex flex-col justify-between h-full z-10">
+              {/* Chat Header */}
+              <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-900">
+                <div className="flex items-center gap-2 text-white font-bold text-sm">
+                  <MessageSquare className="w-4 h-4 text-orange-500" />
+                  <span>Meeting Chat</span>
+                </div>
+                <Button variant="ghost" size="icon" onClick={() => setIsChatOpen(false)} className="text-slate-400 hover:text-white rounded-lg">
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
+
+              {/* Chat Message Logs */}
+              <div className="flex-1 p-4 overflow-y-auto space-y-4 bg-slate-950/30">
+                {chatMessages.length === 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center text-center p-4 text-slate-500 space-y-2">
+                    <MessageSquare className="w-8 h-8 opacity-40" />
+                    <p className="text-xs">No messages yet. Send a message to start watch party discussion!</p>
+                  </div>
+                ) : (
+                  chatMessages.map((msg, index) => (
+                    <div key={index} className="space-y-1">
+                      <div className="flex justify-between text-[10px] font-semibold text-slate-400">
+                        <span>{msg.sender}</span>
+                        <span>{msg.time}</span>
+                      </div>
+                      <div className="bg-slate-900 p-2.5 rounded-xl border border-slate-850 text-xs text-white max-w-[90%] break-words">
+                        {msg.text}
+                      </div>
+                    </div>
+                  ))
                 )}
               </div>
-            </div>
 
-            <Button onClick={endCall} variant="destructive" className="w-full py-4 rounded-xl font-bold flex items-center justify-center gap-1.5 mt-6">
-              <PhoneOff className="w-5 h-5" />
-              End Video Call
-            </Button>
-          </div>
-        )}
-
-        {/* LEFT COLUMN: CALL ENDED */}
-        {callState === "ended" && (
-          <div className="lg:col-span-1 bg-slate-950 p-6 rounded-2xl border border-slate-800 flex flex-col items-center justify-center text-center space-y-6">
-            <div className="w-16 h-16 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center">
-              <PhoneOff className="w-8 h-8" />
-            </div>
-            <div className="space-y-1">
-              <h3 className="text-xl font-bold text-white">Call Ended</h3>
-              <p className="text-xs text-slate-400">The video calling session has terminated</p>
-            </div>
-            <Button onClick={resetCall} className="w-full py-3 bg-orange-600 hover:bg-orange-500 text-white font-semibold rounded-xl">
-              Start New Session
-            </Button>
-          </div>
-        )}
-
-        {/* RIGHT COLUMN: VIDEO FEEDS CANVAS (3/4 Width) */}
-        <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-4">
-          
-          {/* LOCAL STREAM DISPLAY */}
-          <div className="bg-slate-950 rounded-2xl overflow-hidden border border-slate-800 relative aspect-video flex items-center justify-center">
-            {isVideoOff ? (
-              <div className="flex flex-col items-center text-center space-y-2 text-slate-500">
-                <VideoOff className="w-12 h-12" />
-                <span className="text-xs font-semibold">Your Camera is Off</span>
-              </div>
-            ) : useMockLocalFeed ? (
-              <video 
-                src="/video/vdo.mp4"
-                autoPlay 
-                playsInline 
-                loop
-                muted 
-                className="w-full h-full object-cover mirror"
-              />
-            ) : (
-              <video 
-                ref={setLocalVideoRef} 
-                autoPlay 
-                playsInline 
-                muted 
-                className="w-full h-full object-cover mirror"
-              />
-            )}
-            <div className="absolute bottom-3 left-3 bg-black/60 px-3 py-1 rounded-full text-xs font-bold text-white flex items-center gap-1.5">
-              <div className="w-2.5 h-2.5 rounded-full bg-orange-500" />
-              <span>You (Local Feed)</span>
-            </div>
-          </div>
-
-          {/* REMOTE STREAM DISPLAY */}
-          <div className="bg-slate-950 rounded-2xl overflow-hidden border border-slate-800 relative aspect-video flex items-center justify-center">
-            {callState === "connected" ? (
-              <video
-                ref={remoteVideoRef}
-                autoPlay
-                playsInline
-                loop
-                muted
-                src="/video/vdo.mp4" //plays template snowglobe video to simulate peer media
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <div className="flex flex-col items-center text-center space-y-2 text-slate-500 p-4">
-                <Users className="w-12 h-12" />
-                <span className="text-xs font-semibold">Waiting for connection...</span>
-              </div>
-            )}
-            <div className="absolute bottom-3 left-3 bg-black/60 px-3 py-1 rounded-full text-xs font-bold text-white flex items-center gap-1.5">
-              <div className="w-2.5 h-2.5 rounded-full bg-blue-500" />
-              <span>{friendName || "Friend"} (Remote Feed)</span>
-            </div>
-          </div>
-
-          {/* SCREEN SHARE STREAM DISPLAY (FULL WIDTH AT BOTTOM IF SHARING) */}
-          {isScreenSharing && (
-            <div className="md:col-span-2 bg-slate-950 rounded-2xl overflow-hidden border border-slate-800 relative aspect-video flex items-center justify-center">
-              <video 
-                ref={setScreenVideoRef} 
-                autoPlay 
-                playsInline 
-                className="w-full h-full object-contain"
-              />
-              <div className="absolute bottom-3 left-3 bg-black/60 px-3 py-1 rounded-full text-xs font-bold text-white flex items-center gap-1.5">
-                <Tv className="w-4 h-4 text-emerald-400" />
-                <span>Shared YouTube Screen Feed</span>
-              </div>
+              {/* Chat Input Field */}
+              <form onSubmit={handleSendMessage} className="p-4 border-t border-slate-800 bg-slate-900 flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Type message..."
+                  value={newMessage}
+                  onChange={(e) => setNewMessage(e.target.value)}
+                  className="flex-1 px-3 py-2 text-xs rounded-xl bg-slate-950 border border-slate-800 text-white focus:outline-none focus:border-orange-500"
+                />
+                <Button type="submit" size="icon" className="bg-orange-600 hover:bg-orange-500 text-white rounded-xl">
+                  <Send className="w-4 h-4" />
+                </Button>
+              </form>
             </div>
           )}
 
         </div>
-      </div>
+      )}
 
-      {/* FOOTER BAR: CONTROLS */}
-      {callState === "connected" && (
-        <div className="mt-6 border-t border-slate-800 pt-6 flex items-center justify-center gap-4">
-          <Button 
-            onClick={() => {
-              if (localStream) {
-                const audioTrack = localStream.getAudioTracks()[0];
-                if (audioTrack) {
-                  audioTrack.enabled = !audioTrack.enabled;
-                  setIsMuted(!audioTrack.enabled);
-                  toast.info(audioTrack.enabled ? "Microphone active" : "Microphone muted");
-                }
-              }
-            }}
-            className={`p-4 rounded-full w-14 h-14 ${isMuted ? "bg-red-600 hover:bg-red-500 text-white" : "bg-slate-800 hover:bg-slate-700 text-slate-200"}`}
-          >
-            {isMuted ? <MicOff className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
-          </Button>
-
-          <Button 
-            onClick={() => {
-              if (localStream) {
-                const videoTrack = localStream.getVideoTracks()[0];
-                if (videoTrack) {
-                  videoTrack.enabled = !videoTrack.enabled;
-                  setIsVideoOff(!videoTrack.enabled);
-                  toast.info(videoTrack.enabled ? "Camera active" : "Camera turned off");
-                }
-              }
-            }}
-            className={`p-4 rounded-full w-14 h-14 ${isVideoOff ? "bg-red-600 hover:bg-red-500 text-white" : "bg-slate-800 hover:bg-slate-700 text-slate-200"}`}
-          >
-            {isVideoOff ? <VideoOff className="w-6 h-6" /> : <Video className="w-6 h-6" />}
-          </Button>
-
-          <Button 
-            onClick={toggleScreenShare}
-            className={`p-4 rounded-full w-14 h-14 ${isScreenSharing ? "bg-emerald-600 hover:bg-emerald-500 text-white" : "bg-slate-800 hover:bg-slate-700 text-slate-200"}`}
-            title="Share Screen"
-          >
-            <Monitor className="w-6 h-6" />
-          </Button>
-
-          <Button 
-            onClick={async () => {
-              if (useMockLocalFeed) {
-                try {
-                  const stream = await navigator.mediaDevices.getUserMedia({
-                    video: true,
-                    audio: true,
-                  });
-                  setLocalStream(stream);
-                  setUseMockLocalFeed(false);
-                  toast.success("Webcam connected successfully!");
-                } catch (err: any) {
-                  toast.error(`Webcam connection failed: ${err.message || err}`);
-                }
-              } else {
-                setUseMockLocalFeed(true);
-                toast.info("Switched to simulated camera feed.");
-              }
-            }}
-            className={`p-4 rounded-full w-14 h-14 ${!useMockLocalFeed ? "bg-orange-600 hover:bg-orange-500 text-white" : "bg-slate-800 hover:bg-slate-700 text-slate-200"}`}
-            title={useMockLocalFeed ? "Switch to Real Webcam" : "Switch to Simulator"}
-          >
-            <Camera className="w-6 h-6" />
+      {/* 4. CALL ENDED SCREEN */}
+      {callState === "ended" && (
+        <div className="flex-1 flex flex-col items-center justify-center p-6 space-y-6">
+          <div className="w-20 h-20 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center">
+            <PhoneOff className="w-10 h-10" />
+          </div>
+          <div className="space-y-1 text-center">
+            <h3 className="text-2xl font-black text-white">Call Ended</h3>
+            <p className="text-xs text-slate-400">Your video session with {friendName || "Nisha"} has terminated</p>
+          </div>
+          <Button onClick={resetCall} className="px-8 py-3 bg-orange-600 hover:bg-orange-500 text-white font-bold rounded-xl shadow-lg">
+            Return to Setup
           </Button>
         </div>
       )}
-      
+
+      {/* HUD BOTTOM BAR: FLOATING CLASSIC MEETING CONTROLS */}
+      {callState === "connected" && (
+        <div className="bg-slate-900 border-t border-slate-800 px-6 py-4 flex justify-between items-center z-20">
+          
+          {/* LEFT: MEETING DETAILS */}
+          <div className="hidden md:flex items-center gap-3">
+            <div className="w-3.5 h-3.5 rounded-full bg-emerald-500 animate-pulse" />
+            <div>
+              <p className="text-xs font-bold text-white">Live Call: {roomName}</p>
+              <p className="text-[10px] text-slate-400">With {friendName} • Secure P2P</p>
+            </div>
+          </div>
+
+          {/* CENTER: INTERACTIVE SYSTEM CONTROLS */}
+          <div className="flex items-center gap-3 mx-auto md:mx-0">
+            {/* Mic Button */}
+            <Button 
+              onClick={() => {
+                if (localStream) {
+                  const audioTrack = localStream.getAudioTracks()[0];
+                  if (audioTrack) {
+                    audioTrack.enabled = !audioTrack.enabled;
+                    setIsMuted(!audioTrack.enabled);
+                    toast.info(audioTrack.enabled ? "Microphone active" : "Microphone muted");
+                  }
+                } else {
+                  setIsMuted(!isMuted);
+                }
+              }}
+              className={`p-3 rounded-xl w-11 h-11 ${isMuted ? "bg-red-600 hover:bg-red-500 text-white" : "bg-slate-800 hover:bg-slate-750 text-slate-200"}`}
+              title={isMuted ? "Unmute Mic" : "Mute Mic"}
+            >
+              {isMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+            </Button>
+
+            {/* Video Toggle */}
+            <Button 
+              onClick={() => {
+                if (localStream) {
+                  const videoTrack = localStream.getVideoTracks()[0];
+                  if (videoTrack) {
+                    videoTrack.enabled = !videoTrack.enabled;
+                    setIsVideoOff(!videoTrack.enabled);
+                    toast.info(videoTrack.enabled ? "Camera active" : "Camera turned off");
+                  }
+                } else {
+                  setIsVideoOff(!isVideoOff);
+                }
+              }}
+              className={`p-3 rounded-xl w-11 h-11 ${isVideoOff ? "bg-red-600 hover:bg-red-500 text-white" : "bg-slate-800 hover:bg-slate-750 text-slate-200"}`}
+              title={isVideoOff ? "Turn Video On" : "Turn Video Off"}
+            >
+              {isVideoOff ? <VideoOff className="w-5 h-5" /> : <Video className="w-5 h-5" />}
+            </Button>
+
+            {/* Camera Simulation Swap button */}
+            <Button 
+              onClick={async () => {
+                if (useMockLocalFeed) {
+                  try {
+                    const stream = await navigator.mediaDevices.getUserMedia({
+                      video: true,
+                      audio: true,
+                    });
+                    setLocalStream(stream);
+                    setUseMockLocalFeed(false);
+                    toast.success("Webcam connected!");
+                  } catch (err: any) {
+                    toast.error(`Webcam error: ${err.message || err}`);
+                  }
+                } else {
+                  setUseMockLocalFeed(true);
+                  toast.info("Switched to simulator loop.");
+                }
+              }}
+              className={`p-3 rounded-xl w-11 h-11 ${!useMockLocalFeed ? "bg-orange-600 hover:bg-orange-550 text-white" : "bg-slate-800 hover:bg-slate-750 text-slate-200"}`}
+              title={useMockLocalFeed ? "Force Real Webcam" : "Swap to Simulator"}
+            >
+              <Camera className="w-5 h-5" />
+            </Button>
+
+            {/* Screen Share button */}
+            <Button 
+              onClick={toggleScreenShare}
+              className={`p-3 rounded-xl w-11 h-11 ${isScreenSharing ? "bg-emerald-600 hover:bg-emerald-500 text-white" : "bg-slate-800 hover:bg-slate-750 text-slate-200"}`}
+              title="Share Screen"
+            >
+              <Monitor className="w-5 h-5" />
+            </Button>
+
+            {/* Session Recording button */}
+            {isRecording ? (
+              <Button onClick={stopRecording} className="p-3 bg-red-600 hover:bg-red-500 text-white rounded-xl w-11 h-11" title="Stop Recording">
+                <Square className="w-4 h-4 fill-white" />
+              </Button>
+            ) : (
+              <Button onClick={startRecording} className="p-3 bg-slate-800 hover:bg-slate-750 text-slate-200 rounded-xl w-11 h-11" title="Record Meeting">
+                <Circle className="w-3.5 h-3.5 fill-red-500 text-red-500" />
+              </Button>
+            )}
+
+            {/* HANG UP BUTTON */}
+            <Button onClick={endCall} variant="destructive" className="px-5 rounded-xl h-11 font-bold flex items-center gap-1.5 shadow-lg bg-red-600 hover:bg-red-500">
+              <PhoneOff className="w-5 h-5" />
+              <span className="hidden sm:inline">Leave</span>
+            </Button>
+          </div>
+
+          {/* RIGHT: CHAT AND PANEL TOGGLES */}
+          <div className="hidden md:flex items-center gap-3">
+            <Button 
+              onClick={() => setIsChatOpen(!isChatOpen)}
+              className={`p-3 rounded-xl w-11 h-11 ${isChatOpen ? "bg-orange-600 text-white hover:bg-orange-500" : "bg-slate-800 hover:bg-slate-750 text-slate-200"}`}
+              title="Toggle Chat"
+            >
+              <MessageSquare className="w-5 h-5" />
+            </Button>
+            <Button 
+              onClick={() => setIsPipFloating(!isPipFloating)}
+              className={`p-3 rounded-xl w-11 h-11 ${isPipFloating ? "bg-orange-600 text-white hover:bg-orange-500" : "bg-slate-800 hover:bg-slate-750 text-slate-200"}`}
+              title="Toggle Your PiP View"
+            >
+              <Tv className="w-5 h-5" />
+            </Button>
+          </div>
+
+        </div>
+      )}
+
       <style jsx global>{`
         .mirror {
           transform: scaleX(-1);
