@@ -11,6 +11,7 @@ export const handlehistory = async (req, res) => {
   }
 
   try {
+    await history.findOneAndDelete({ viewer: userId, videoid: videoId });
     await history.create({ viewer: userId, videoid: videoId });
     await video.findByIdAndUpdate(videoId, { $inc: { views: 1 } });
     return res.status(200).json({ history: true });
@@ -43,6 +44,7 @@ export const getallhistoryVideo = async (req, res) => {
         path: "videoid",
         model: "videofiles",
       })
+      .sort({ createdAt: -1 })
       .exec();
     return res.status(200).json(historyvideo);
   } catch (error) {
@@ -50,3 +52,17 @@ export const getallhistoryVideo = async (req, res) => {
     return res.status(500).json({ message: "Something went wrong" });
   }
 };
+export const deleteHistoryEntry = async (req, res) => {
+  const { historyId } = req.params;
+  if (!mongoose.Types.ObjectId.isValid(historyId)) {
+    return res.status(400).json({ message: "Invalid history ID" });
+  }
+  try {
+    await history.findByIdAndDelete(historyId);
+    return res.status(200).json({ message: "Successfully removed from history" });
+  } catch (error) {
+    console.error("Error deleting history entry:", error);
+    return res.status(500).json({ message: "Something went wrong" });
+  }
+};
+

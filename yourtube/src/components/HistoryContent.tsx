@@ -50,7 +50,7 @@ export default function HistoryContent() {
   const handleRemoveFromHistory = async (historyId: string) => {
     try {
       console.log("Removing from history:", historyId);
-
+      await axiosInstance.delete(`/history/${historyId}`);
       setHistory(history.filter((item) => item._id !== historyId));
     } catch (error) {
       console.error("Error removing from history:", error);
