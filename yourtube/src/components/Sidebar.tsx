@@ -54,6 +54,12 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
             Home
           </Button>
         </Link>
+        <Link href="/explore">
+          <Button variant="ghost" className="w-full justify-start">
+            <Compass className="w-5 h-5 mr-3" />
+            Explore
+          </Button>
+        </Link>
         <Link href="/subscriptions">
           <Button variant="ghost" className="w-full justify-start">
             <PlaySquare className="w-5 h-5 mr-3" />

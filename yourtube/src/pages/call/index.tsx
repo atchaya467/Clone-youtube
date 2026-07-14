@@ -536,15 +536,21 @@ export default function VoIPCallPage() {
         // A. No offer exists. We are Peer A (Offeror / Caller)
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
-        await axiosInstance.post("/signal/post", {
+        const postRes = await axiosInstance.post("/signal/post", {
           roomName,
           type: "offer",
           sender: localSenderId.current,
           data: offer,
         });
+        if (postRes.data && postRes.data.signal && postRes.data.signal.createdAt) {
+          callStartTimeRef.current = new Date(postRes.data.signal.createdAt).getTime();
+        } else {
+          callStartTimeRef.current = Date.now();
+        }
         toast.info("Created call room. Waiting for friend to join...");
       } else {
         // B. An offer exists. We are Peer B (Answerer / Joiner)
+        callStartTimeRef.current = new Date(offerSignal.createdAt).getTime();
         await pc.setRemoteDescription(new RTCSessionDescription(offerSignal.data));
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
@@ -570,9 +576,9 @@ export default function VoIPCallPage() {
           const res = await axiosInstance.get(`/signal/get?roomName=${roomName}&sender=${localSenderId.current}`);
           const newSignals = res.data.signals || [];
           for (const sig of newSignals) {
-            // Ignore signals created before this call started to prevent conflict with leftover signals (10 minutes window)
+            // Ignore signals created before this call session started to prevent conflict with leftover signals
             const sigTime = new Date(sig.createdAt).getTime();
-            if (sigTime < callStartTimeRef.current - 600000) continue;
+            if (sigTime < callStartTimeRef.current) continue;
 
             if (appliedSignalIds.current.has(sig._id)) continue;
             appliedSignalIds.current.add(sig._id);
