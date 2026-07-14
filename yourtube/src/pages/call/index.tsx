@@ -41,6 +41,13 @@ export default function VoIPCallPage() {
   const [callState, setCallState] = useState<"idle" | "calling" | "connected" | "ended">("idle");
   const [roomName, setRoomName] = useState("");
   const [friendName, setFriendName] = useState("");
+  const [localUserName, setLocalUserName] = useState("");
+
+  useEffect(() => {
+    if (user?.name) {
+      setLocalUserName(user.name);
+    }
+  }, [user]);
   
   // Device & HUD states
   const [isMuted, setIsMuted] = useState(false);
@@ -69,6 +76,8 @@ export default function VoIPCallPage() {
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   
   // Refs
+  const localVideoRef = useRef<HTMLVideoElement>(null);
+  const screenVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const ringtoneIntervalRef = useRef<any>(null);
@@ -85,6 +94,25 @@ export default function VoIPCallPage() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
   const recordingIntervalRef = useRef<any>(null);
+
+  // Synchronize stream updates with video element DOM nodes
+  useEffect(() => {
+    if (localVideoRef.current && localStream) {
+      localVideoRef.current.srcObject = localStream;
+    }
+  }, [localStream, isLocalVideoMain, isPipFloating, callState]);
+
+  useEffect(() => {
+    if (remoteVideoRef.current && remoteStream) {
+      remoteVideoRef.current.srcObject = remoteStream;
+    }
+  }, [remoteStream, isLocalVideoMain, isPipFloating, callState]);
+
+  useEffect(() => {
+    if (screenVideoRef.current && screenStream) {
+      screenVideoRef.current.srcObject = screenStream;
+    }
+  }, [screenStream, isLocalVideoMain, isPipFloating, callState]);
 
   // Audio chimes synthesiser using Web Audio API
   const playSynthesizedChime = (notes: number[], type: OscillatorType = "sine", duration = 0.15) => {
@@ -279,7 +307,7 @@ export default function VoIPCallPage() {
           roomName,
           type: "leave",
           sender: localSenderId.current,
-          data: { name: user?.name || "Friend" }
+          data: { name: user?.name || localUserName.trim() || "Guest" }
         });
         
         fetch(url, {
@@ -297,26 +325,7 @@ export default function VoIPCallPage() {
       window.removeEventListener("beforeunload", handleUnload);
       window.removeEventListener("pagehide", handleUnload);
     };
-  }, [callState, roomName, user]);
-
-  // Callback Refs to guarantee immediate srcObject binding
-  const setLocalVideoRef = (el: HTMLVideoElement | null) => {
-    if (el && localStream) {
-      el.srcObject = localStream;
-    }
-  };
-
-  const setScreenVideoRef = (el: HTMLVideoElement | null) => {
-    if (el && screenStream) {
-      el.srcObject = screenStream;
-    }
-  };
-
-  const setRemoteVideoRef = (el: HTMLVideoElement | null) => {
-    if (el && remoteStream) {
-      el.srcObject = remoteStream;
-    }
-  };
+  }, [callState, roomName, user, localUserName]);
 
   const cleanupSignaling = () => {
     if (pollingIntervalRef.current) {
@@ -431,8 +440,9 @@ export default function VoIPCallPage() {
 
   // Initiate call & WebRTC signaling
   const startCall = async () => {
-    if (!roomName.trim() || !friendName.trim()) {
-      toast.error("Please enter a room code and your friend's name.");
+    const finalLocalName = user?.name || localUserName.trim();
+    if (!roomName.trim() || !friendName.trim() || (!user && !finalLocalName)) {
+      toast.error("Please fill in all the fields.");
       return;
     }
 
@@ -482,12 +492,17 @@ export default function VoIPCallPage() {
         }
       };
 
-      // Monitor connection state to alert on network mismatches
+      // Monitor connection state to alert on network mismatches or remote dropouts
       pc.onconnectionstatechange = () => {
         if (pc.connectionState === "failed") {
           toast.error("WebRTC connection failed. Ensure BOTH your phone and laptop are on the same Wi-Fi network!", {
             duration: 8000
           });
+        } else if (pc.connectionState === "disconnected" || pc.connectionState === "closed") {
+          toast.error(`${friendName} disconnected.`);
+          setTimeout(() => {
+            endCall(false);
+          }, 1500);
         }
       };
 
@@ -500,8 +515,19 @@ export default function VoIPCallPage() {
       };
 
       // 2. Fetch existing room signals to identify if we are the Offeror or Answerer
-      const getRes = await axiosInstance.get(`/signal/get?roomName=${roomName}`);
-      const signals = getRes.data.signals || [];
+      const getRes = await axiosInstance.get(`/signal/get?roomName=${roomName}&sender=${localSenderId.current}`);
+      let signals = getRes.data.signals || [];
+      
+      const now = Date.now();
+      const hasLeave = signals.some((s: any) => s.type === "leave");
+      const isStale = signals.length > 0 && now - new Date(signals[signals.length - 1].createdAt).getTime() > 300000;
+      
+      if (hasLeave || isStale) {
+        // Clear all signals in this room to start clean
+        await axiosInstance.post("/signal/clear", { roomName }).catch(() => {});
+        signals = [];
+      }
+
       // Filter out older signals from previous call sessions in the same room (10 minutes window)
       const activeSignals = signals.filter((s: any) => new Date(s.createdAt).getTime() >= callStartTimeRef.current - 600000);
       const offerSignal = activeSignals.find((s: any) => s.type === "offer");
@@ -586,7 +612,10 @@ export default function VoIPCallPage() {
                 return [...prev, sig.data];
               });
             } else if (sig.type === "leave") {
-              const leavingName = sig.data?.name || friendName;
+              const rawName = sig.data?.name;
+              const leavingName = (rawName && rawName !== "Guest" && rawName !== "Friend" && rawName !== "You")
+                ? rawName
+                : friendName;
               toast.error(`${leavingName} has left the meeting.`);
               setTimeout(() => {
                 endCall(false); // End call locally without sending duplicate signaling packet
@@ -824,7 +853,7 @@ export default function VoIPCallPage() {
         roomName,
         type: "leave",
         sender: localSenderId.current,
-        data: { name: user?.name || "Friend" }
+        data: { name: user?.name || localUserName.trim() || "Guest" }
       }).catch(err => {});
 
       // Clear room signals from database to clear peer state after a delay of 5 seconds
@@ -852,8 +881,9 @@ export default function VoIPCallPage() {
     e.preventDefault();
     if (!newMessage.trim()) return;
 
+    const senderName = user?.name || localUserName.trim() || "You";
     const msg = {
-      sender: user?.name || "You",
+      sender: senderName,
       text: newMessage.trim(),
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
@@ -919,9 +949,22 @@ export default function VoIPCallPage() {
                   placeholder="e.g. party-room-101"
                   value={roomName}
                   onChange={(e) => setRoomName(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl border border-slate-850 bg-slate-950 text-white focus:outline-none focus:border-orange-500 text-sm font-semibold transition-all duration-200"
+                  className="w-full px-4 py-3 rounded-xl border border-slate-855 bg-slate-955 text-white focus:outline-none focus:border-orange-500 text-sm font-semibold transition-all duration-200"
                 />
               </div>
+
+              {!user && (
+                <div>
+                  <label className="block text-[10px] font-extrabold uppercase tracking-wider text-slate-400 mb-1">Your Name</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. निशा / Nisha"
+                    value={localUserName}
+                    onChange={(e) => setLocalUserName(e.target.value)}
+                    className="w-full px-4 py-3 rounded-xl border border-slate-855 bg-slate-955 text-white focus:outline-none focus:border-orange-500 text-sm font-semibold transition-all duration-200"
+                  />
+                </div>
+              )}
 
               <div>
                 <label className="block text-[10px] font-extrabold uppercase tracking-wider text-slate-400 mb-1">Friend's Name</label>
@@ -930,7 +973,7 @@ export default function VoIPCallPage() {
                   placeholder="e.g. Nisha"
                   value={friendName}
                   onChange={(e) => setFriendName(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl border border-slate-850 bg-slate-950 text-white focus:outline-none focus:border-orange-500 text-sm font-semibold transition-all duration-200"
+                  className="w-full px-4 py-3 rounded-xl border border-slate-855 bg-slate-955 text-white focus:outline-none focus:border-orange-500 text-sm font-semibold transition-all duration-200"
                 />
               </div>
 
@@ -971,8 +1014,7 @@ export default function VoIPCallPage() {
       {/* 3. ACTIVE CONNECTED MEET VIEW */}
       {callState === "connected" && (
         <div className="flex-1 flex flex-row relative h-[calc(100vh-88px)]">
-          
-          {/* THE MAIN VIDEO CANVAS AREA */}
+                  {/* THE MAIN VIDEO CANVAS AREA */}
           <div className="flex-1 bg-slate-950 relative overflow-hidden flex items-center justify-center">
             
             {/* BACKGROUND: REMOTE PEER VIDEO (OR LOCAL VIDEO IF SWAPPED) */}
@@ -980,7 +1022,8 @@ export default function VoIPCallPage() {
               {isScreenSharing && screenStream ? (
                 // Screen share is active, remote feed moves to floating PiP, screen share takes main background
                 <video 
-                  ref={setScreenVideoRef}
+                  key="main-screen-video"
+                  ref={screenVideoRef}
                   autoPlay 
                   playsInline 
                   className="w-full h-full object-contain bg-black"
@@ -995,7 +1038,7 @@ export default function VoIPCallPage() {
                 ) : useMockLocalFeed ? (
                   <div className="relative w-full h-full bg-slate-955 flex flex-col items-center justify-center text-slate-500">
                     <div className="w-20 h-20 bg-slate-800 rounded-full flex items-center justify-center text-xl font-bold text-white mb-2 shadow-lg">
-                      {(user?.name || "You").charAt(0).toUpperCase()}
+                      {(user?.name || localUserName.trim() || "You").charAt(0).toUpperCase()}
                     </div>
                     <span className="text-xs font-bold">Camera is Blocked / Off</span>
                     <button 
@@ -1007,7 +1050,8 @@ export default function VoIPCallPage() {
                   </div>
                 ) : (
                   <video 
-                    ref={setLocalVideoRef} 
+                    key="main-local-video"
+                    ref={localVideoRef} 
                     autoPlay 
                     playsInline 
                     muted 
@@ -1017,7 +1061,8 @@ export default function VoIPCallPage() {
               ) : remoteStream ? (
                 // A real remote feed stream is active
                 <video
-                  ref={setRemoteVideoRef}
+                  key="main-remote-video"
+                  ref={remoteVideoRef}
                   autoPlay
                   playsInline
                   className={`w-full h-full ${isRemoteScreenSharing ? "object-contain bg-black" : "object-cover"}`}
@@ -1036,30 +1081,33 @@ export default function VoIPCallPage() {
                 </div>
               )}
             </div>
+            
             {/* NAME TAG & MIC STATE OVERLAY (FOR MAIN VIDEO STREAM OWNER) */}
-            <div className="absolute bottom-6 left-6 z-10 flex items-center gap-3 bg-black/60 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-slate-855">
-              <div className="relative">
-                {(!isLocalVideoMain ? isFriendSpeaking : isLocalSpeaking) && (
-                  <span className="absolute -inset-1 rounded-full bg-emerald-500/40 animate-ping" />
-                )}
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black text-white ${(!isLocalVideoMain ? isFriendSpeaking : isLocalSpeaking) ? "bg-emerald-600" : "bg-blue-600"}`}>
-                  {(isScreenSharing && screenStream) || isRemoteScreenSharing ? (
-                    <Monitor className="w-4 h-4" />
-                  ) : (
-                    (!isLocalVideoMain ? friendName : (user?.name || "You")).charAt(0).toUpperCase()
+            {(!isLocalVideoMain ? !!remoteStream : true) && (
+              <div className="absolute bottom-6 left-6 z-10 flex items-center gap-3 bg-black/60 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-slate-855">
+                <div className="relative">
+                  {(!isLocalVideoMain ? isFriendSpeaking : isLocalSpeaking) && (
+                    <span className="absolute -inset-1 rounded-full bg-emerald-500/40 animate-ping" />
                   )}
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black text-white ${(!isLocalVideoMain ? isFriendSpeaking : isLocalSpeaking) ? "bg-emerald-600" : "bg-blue-600"}`}>
+                    {(isScreenSharing && screenStream) || isRemoteScreenSharing ? (
+                      <Monitor className="w-4 h-4" />
+                    ) : (
+                      (!isLocalVideoMain ? friendName : (user?.name || localUserName.trim() || "You")).charAt(0).toUpperCase()
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                    <span>{getMainStreamOwnerName()}</span>
+                    {(!isLocalVideoMain ? isFriendSpeaking : isLocalSpeaking) && <Volume2 className="w-3.5 h-3.5 text-emerald-400 animate-bounce" />}
+                  </div>
+                  <span className="text-[10px] text-slate-400">
+                    {getMainStreamSubtitle()}
+                  </span>
                 </div>
               </div>
-              <div>
-                <div className="text-xs font-bold text-white flex items-center gap-1.5">
-                  <span>{getMainStreamOwnerName()}</span>
-                  {(!isLocalVideoMain ? isFriendSpeaking : isLocalSpeaking) && <Volume2 className="w-3.5 h-3.5 text-emerald-400 animate-bounce" />}
-                </div>
-                <span className="text-[10px] text-slate-400">
-                  {getMainStreamSubtitle()}
-                </span>
-              </div>
-            </div>
+            )}
 
             {/* FLOATING VIDEO PiP WINDOW */}
             {isPipFloating && (
@@ -1076,9 +1124,9 @@ export default function VoIPCallPage() {
                       <span className="text-[9px] font-bold mt-1">Camera Off</span>
                     </div>
                   ) : useMockLocalFeed ? (
-                    <div className="relative w-full h-full bg-slate-950 flex flex-col items-center justify-center text-slate-500">
+                    <div className="relative w-full h-full bg-slate-955 flex flex-col items-center justify-center text-slate-500">
                       <div className="w-10 h-10 bg-slate-800 rounded-full flex items-center justify-center text-xs font-bold text-white mb-1 shadow-md">
-                        {(user?.name || "You").charAt(0).toUpperCase()}
+                        {(user?.name || localUserName.trim() || "You").charAt(0).toUpperCase()}
                       </div>
                       <span className="text-[8px] font-semibold text-slate-400">Blocked / Off</span>
                       <button 
@@ -1090,7 +1138,8 @@ export default function VoIPCallPage() {
                     </div>
                   ) : (
                     <video 
-                      ref={setLocalVideoRef} 
+                      key="pip-local-video"
+                      ref={localVideoRef} 
                       autoPlay 
                       playsInline 
                       muted 
@@ -1101,7 +1150,8 @@ export default function VoIPCallPage() {
                   // Remote video in PIP
                   remoteStream ? (
                     <video
-                      ref={setRemoteVideoRef}
+                      key="pip-remote-video"
+                      ref={remoteVideoRef}
                       autoPlay
                       playsInline
                       className={`w-full h-full ${isRemoteScreenSharing ? "object-contain bg-black" : "object-cover"}`}
@@ -1117,7 +1167,7 @@ export default function VoIPCallPage() {
                 )}
                 <div className="absolute bottom-2 left-2 bg-black/70 px-2 py-0.5 rounded-lg text-[9px] font-extrabold text-white flex items-center gap-1">
                   <div className={`w-1.5 h-1.5 rounded-full ${!isLocalVideoMain ? (isLocalSpeaking ? "bg-emerald-500 animate-pulse" : "bg-orange-500") : (isFriendSpeaking ? "bg-emerald-500 animate-pulse" : "bg-blue-500")}`} />
-                  <span>{!isLocalVideoMain ? "You" : friendName}</span>
+                  <span>{!isLocalVideoMain ? (user?.name || localUserName.trim() || "You") : friendName}</span>
                 </div>
               </div>
             )}
@@ -1127,7 +1177,8 @@ export default function VoIPCallPage() {
               <div className="absolute top-4 left-4 w-24 sm:w-44 aspect-video bg-slate-900 rounded-2xl overflow-hidden border border-slate-750 shadow-2xl z-20">
                 {remoteStream ? (
                   <video
-                    ref={setRemoteVideoRef}
+                    key="screenshare-remote-video"
+                    ref={remoteVideoRef}
                     autoPlay
                     playsInline
                     className="w-full h-full object-cover"
