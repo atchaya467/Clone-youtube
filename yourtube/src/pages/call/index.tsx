@@ -1004,6 +1004,17 @@ export default function VoIPCallPage() {
                 </div>
               )}
 
+              <div>
+                <label className="block text-[10px] font-extrabold uppercase tracking-wider text-slate-400 mb-1">Friend's Name (Optional)</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Nisha"
+                  value={friendName}
+                  onChange={(e) => setFriendName(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl border border-slate-855 bg-slate-955 text-white focus:outline-none focus:border-orange-500 text-sm font-semibold transition-all duration-200"
+                />
+              </div>
+
               <Button 
                 onClick={startCall}
                 className="w-full py-4 bg-orange-600 hover:bg-orange-500 text-white font-bold rounded-xl shadow-lg mt-6 flex items-center justify-center gap-2"
