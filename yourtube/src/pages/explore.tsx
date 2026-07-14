@@ -212,12 +212,12 @@ export default function ExplorePage() {
       </Head>
 
       <main className="flex-1 p-6 max-w-7xl mx-auto space-y-8 w-full text-slate-900 dark:text-slate-100 transition-colors duration-200">
-        
+
         {/* HERO HEADER BANNER */}
         <div className="relative rounded-3xl overflow-hidden bg-gradient-to-r from-red-500 via-orange-500 to-amber-500 dark:from-red-950/40 dark:via-orange-950/40 dark:to-amber-950/40 p-8 md:p-12 shadow-2xl border border-orange-500/10 dark:border-orange-500/5">
           <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none" />
           <div className="absolute bottom-0 left-0 w-64 h-64 bg-black/10 rounded-full blur-2xl -ml-16 -mb-16 pointer-events-none" />
-          
+
           <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
             <div className="space-y-3 max-w-xl">
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-white/20 backdrop-blur text-white shadow-sm">
@@ -260,8 +260,8 @@ export default function ExplorePage() {
                   onClick={() => setActiveCategory(cat.id)}
                   className={`
                     group relative rounded-2xl p-4 flex flex-col items-center justify-center text-center gap-2 border transition-all duration-200 overflow-hidden cursor-pointer
-                    ${isActive 
-                      ? "bg-slate-900 border-slate-800 text-white dark:bg-white dark:border-white dark:text-slate-950 shadow-md font-bold" 
+                    ${isActive
+                      ? "bg-slate-900 border-slate-800 text-white dark:bg-white dark:border-white dark:text-slate-950 shadow-md font-bold"
                       : "bg-white hover:bg-slate-50 border-slate-100 text-slate-800 dark:bg-slate-900/50 dark:border-slate-850 dark:text-slate-200 dark:hover:bg-slate-850/50"
                     }
                   `}

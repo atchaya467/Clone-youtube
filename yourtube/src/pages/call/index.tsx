@@ -48,6 +48,16 @@ export default function VoIPCallPage() {
       setLocalUserName(user.name);
     }
   }, [user]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const roomParam = params.get("room");
+      if (roomParam) {
+        setRoomName(roomParam);
+      }
+    }
+  }, []);
   
   // Device & HUD states
   const [isMuted, setIsMuted] = useState(false);
@@ -441,14 +451,14 @@ export default function VoIPCallPage() {
   // Initiate call & WebRTC signaling
   const startCall = async () => {
     const finalLocalName = user?.name || localUserName.trim();
-    if (!roomName.trim() || !friendName.trim() || (!user && !finalLocalName)) {
+    if (!roomName.trim() || (!user && !finalLocalName)) {
       toast.error("Please fill in all the fields.");
       return;
     }
 
     callStartTimeRef.current = Date.now();
     setCallState("calling");
-    toast.info(`Calling ${friendName}...`);
+    toast.info(friendName ? `Calling ${friendName}...` : "Connecting to room...");
     startRingtone();
 
     try {
@@ -496,10 +506,11 @@ export default function VoIPCallPage() {
       pc.onconnectionstatechange = () => {
         if (pc.connectionState === "failed") {
           toast.error("WebRTC connection failed. Ensure BOTH your phone and laptop are on the same Wi-Fi network!", {
-            duration: 8000
+            duration: 8005
           });
         } else if (pc.connectionState === "disconnected" || pc.connectionState === "closed") {
-          toast.error(`${friendName} disconnected.`);
+          const leavingName = friendName || "Friend";
+          toast.error(`${leavingName} disconnected.`);
           setTimeout(() => {
             endCall(false);
           }, 1500);
@@ -540,7 +551,11 @@ export default function VoIPCallPage() {
           roomName,
           type: "offer",
           sender: localSenderId.current,
-          data: offer,
+          data: {
+            sdp: offer.sdp,
+            type: offer.type,
+            userName: finalLocalName
+          },
         });
         if (postRes.data && postRes.data.signal && postRes.data.signal.createdAt) {
           callStartTimeRef.current = new Date(postRes.data.signal.createdAt).getTime();
@@ -551,16 +566,27 @@ export default function VoIPCallPage() {
       } else {
         // B. An offer exists. We are Peer B (Answerer / Joiner)
         callStartTimeRef.current = new Date(offerSignal.createdAt).getTime();
-        await pc.setRemoteDescription(new RTCSessionDescription(offerSignal.data));
+        if (offerSignal.data?.userName) {
+          setFriendName(offerSignal.data.userName);
+        }
+        const remoteDesc = {
+          type: offerSignal.data.type,
+          sdp: offerSignal.data.sdp
+        };
+        await pc.setRemoteDescription(new RTCSessionDescription(remoteDesc));
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
         await axiosInstance.post("/signal/post", {
           roomName,
           type: "answer",
           sender: localSenderId.current,
-          data: answer,
+          data: {
+            sdp: answer.sdp,
+            type: answer.type,
+            userName: finalLocalName
+          },
         });
-        toast.success("Joined call room. Establishing connection...");
+        toast.success(`Joined call room. Connected to ${offerSignal.data?.userName || "friend"}!`);
 
         // Parse any existing screenshare signal in the room
         const screenshareSignal = activeSignals.filter((s: any) => s.type === "screenshare").pop();
@@ -584,8 +610,14 @@ export default function VoIPCallPage() {
             appliedSignalIds.current.add(sig._id);
 
             if (sig.type === "answer" && pc.signalingState === "have-local-offer") {
-              await pc.setRemoteDescription(new RTCSessionDescription(sig.data));
-              toast.success(`${friendName} joined the call!`);
+              const remoteDesc = {
+                type: sig.data.type,
+                sdp: sig.data.sdp
+              };
+              await pc.setRemoteDescription(new RTCSessionDescription(remoteDesc));
+              const remoteName = sig.data?.userName || "Friend";
+              setFriendName(remoteName);
+              toast.success(`${remoteName} joined the call!`);
               
               // Process queued candidates
               for (const cand of queuedCandidatesRef.current) {
@@ -621,7 +653,7 @@ export default function VoIPCallPage() {
               const rawName = sig.data?.name;
               const leavingName = (rawName && rawName !== "Guest" && rawName !== "Friend" && rawName !== "You")
                 ? rawName
-                : friendName;
+                : (friendName || "Friend");
               toast.error(`${leavingName} has left the meeting.`);
               setTimeout(() => {
                 endCall(false); // End call locally without sending duplicate signaling packet
@@ -644,7 +676,7 @@ export default function VoIPCallPage() {
           setChatMessages((prev) => [
             ...prev,
             {
-              sender: friendName,
+              sender: friendName || "Friend",
               text: `Hey! I'm connected in room ${roomName}. Ready to watch and talk?`,
               time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
             }
@@ -972,17 +1004,6 @@ export default function VoIPCallPage() {
                 </div>
               )}
 
-              <div>
-                <label className="block text-[10px] font-extrabold uppercase tracking-wider text-slate-400 mb-1">Friend's Name</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Nisha"
-                  value={friendName}
-                  onChange={(e) => setFriendName(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl border border-slate-855 bg-slate-955 text-white focus:outline-none focus:border-orange-500 text-sm font-semibold transition-all duration-200"
-                />
-              </div>
-
               <Button 
                 onClick={startCall}
                 className="w-full py-4 bg-orange-600 hover:bg-orange-500 text-white font-bold rounded-xl shadow-lg mt-6 flex items-center justify-center gap-2"
@@ -1006,7 +1027,7 @@ export default function VoIPCallPage() {
           </div>
           
           <div className="text-center space-y-1">
-            <h3 className="text-2xl font-black text-white">Calling {friendName}...</h3>
+            <h3 className="text-2xl font-black text-white">{friendName ? `Calling ${friendName}...` : "Connecting to room..."}</h3>
             <p className="text-sm text-slate-400">Initiating WebRTC handshake in room {roomName}</p>
             <p className="text-xs text-orange-500 animate-pulse mt-2">☎️ Ringing...</p>
           </div>
@@ -1082,8 +1103,20 @@ export default function VoIPCallPage() {
                     </div>
                     <span className="absolute -inset-1 rounded-full border border-orange-500/20 animate-ping" />
                   </div>
-                  <h3 className="text-lg font-bold text-white">Waiting for {friendName} to join...</h3>
+                  <h3 className="text-lg font-bold text-white">Waiting for {friendName || "someone"} to join...</h3>
                   <p className="text-xs text-slate-500 mt-1 max-w-xs">Share the Room ID with your friend so they can join this video call.</p>
+                  <Button
+                    onClick={() => {
+                      if (typeof window !== "undefined") {
+                        const shareUrl = `${window.location.origin}/call?room=${encodeURIComponent(roomName)}`;
+                        navigator.clipboard.writeText(shareUrl);
+                        toast.success("Shareable room link copied to clipboard!");
+                      }
+                    }}
+                    className="mt-4 px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white text-xs font-bold rounded-xl shadow-lg transition-all"
+                  >
+                    Copy Invite Link
+                  </Button>
                 </div>
               )}
             </div>
@@ -1099,7 +1132,7 @@ export default function VoIPCallPage() {
                     {(isScreenSharing && screenStream) || isRemoteScreenSharing ? (
                       <Monitor className="w-4 h-4" />
                     ) : (
-                      (!isLocalVideoMain ? friendName : (user?.name || localUserName.trim() || "You")).charAt(0).toUpperCase()
+                      (!isLocalVideoMain ? (friendName || "Friend") : (user?.name || localUserName.trim() || "You")).charAt(0).toUpperCase()
                     )}
                   </div>
                 </div>
@@ -1165,7 +1198,7 @@ export default function VoIPCallPage() {
                   ) : (
                     <div className="w-full h-full flex flex-col items-center justify-center bg-slate-900 text-slate-500 text-center p-1">
                       <div className="w-10 h-10 bg-slate-800 rounded-full flex items-center justify-center text-xs font-bold text-white mb-1 shadow-md">
-                        {friendName.charAt(0).toUpperCase()}
+                        {(friendName || "Friend").charAt(0).toUpperCase()}
                       </div>
                       <span className="text-[8px] font-semibold text-slate-400">Connecting...</span>
                     </div>
@@ -1173,7 +1206,7 @@ export default function VoIPCallPage() {
                 )}
                 <div className="absolute bottom-2 left-2 bg-black/70 px-2 py-0.5 rounded-lg text-[9px] font-extrabold text-white flex items-center gap-1">
                   <div className={`w-1.5 h-1.5 rounded-full ${!isLocalVideoMain ? (isLocalSpeaking ? "bg-emerald-500 animate-pulse" : "bg-orange-500") : (isFriendSpeaking ? "bg-emerald-500 animate-pulse" : "bg-blue-500")}`} />
-                  <span>{!isLocalVideoMain ? (user?.name || localUserName.trim() || "You") : friendName}</span>
+                  <span>{!isLocalVideoMain ? (user?.name || localUserName.trim() || "You") : (friendName || "Friend")}</span>
                 </div>
               </div>
             )}
@@ -1192,13 +1225,13 @@ export default function VoIPCallPage() {
                 ) : (
                   <div className="w-full h-full flex flex-col items-center justify-center bg-slate-955 text-slate-500 text-center p-1">
                     <div className="w-8 h-8 bg-slate-800 rounded-full flex items-center justify-center text-[10px] font-bold text-white mb-1 shadow-md">
-                      {friendName.charAt(0).toUpperCase()}
+                      {(friendName || "Friend").charAt(0).toUpperCase()}
                     </div>
                     <span className="text-[8px] font-semibold text-slate-400">Connecting...</span>
                   </div>
                 )}
                 <div className="absolute bottom-2 left-2 bg-black/70 px-2 py-0.5 rounded-lg text-[9px] font-extrabold text-white">
-                  <span>{friendName}</span>
+                  <span>{friendName || "Friend"}</span>
                 </div>
               </div>
             )}
@@ -1292,7 +1325,21 @@ export default function VoIPCallPage() {
           <div className="hidden md:flex items-center gap-3">
             <div className="w-3.5 h-3.5 rounded-full bg-emerald-500 animate-pulse" />
             <div>
-              <p className="text-xs font-bold text-white font-mono">Room ID: {roomName}</p>
+              <div className="flex items-center gap-2">
+                <p className="text-xs font-bold text-white font-mono">Room ID: {roomName}</p>
+                <button
+                  onClick={() => {
+                    if (typeof window !== "undefined") {
+                      const shareUrl = `${window.location.origin}/call?room=${encodeURIComponent(roomName)}`;
+                      navigator.clipboard.writeText(shareUrl);
+                      toast.success("Shareable room link copied to clipboard!");
+                    }
+                  }}
+                  className="text-[10px] text-orange-400 hover:text-orange-300 underline font-semibold transition-all"
+                >
+                  Copy Link
+                </button>
+              </div>
               <p className="text-[10px] text-slate-400">
                 {remoteStream ? "🔗 Live Peer Connection Connected" : "☎️ Simulating Room Connection"}
               </p>
