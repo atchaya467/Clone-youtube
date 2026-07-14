@@ -98,8 +98,14 @@ export default function WatchLaterContent() {
             <Link href={`/watch/${item.videoid._id}`} className="flex-shrink-0 w-full sm:w-40">
               <div className="relative w-full aspect-video bg-gray-100 rounded overflow-hidden">
                 <video
-                  src={buildApiUrl(item.videoid?.filepath)}
-                  className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-200"
+                  src={buildApiUrl(item.videoid?.filepath || "/video/vdo.mp4")}
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                  onError={(e) => {
+                    const target = e.target as HTMLVideoElement;
+                    if (!target.src.includes("/video/vdo.mp4")) {
+                      target.src = "/video/vdo.mp4";
+                    }
+                  }}
                 />
               </div>
             </Link>

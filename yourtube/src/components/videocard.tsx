@@ -15,11 +15,20 @@ export default function VideoCard({ video, onDelete }: any) {
               src={buildApiUrl(video.thumbnailpath)}
               alt={video.videotitle}
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+              onError={(e) => {
+                e.currentTarget.src = "/placeholder.svg?height=90&width=160";
+              }}
             />
           ) : (
             <video
-              src={buildApiUrl(video?.filepath)}
+              src={buildApiUrl(video?.filepath || "/video/vdo.mp4")}
               className="object-cover group-hover:scale-105 transition-transform duration-200"
+              onError={(e) => {
+                const target = e.target as HTMLVideoElement;
+                if (!target.src.includes("/video/vdo.mp4")) {
+                  target.src = "/video/vdo.mp4";
+                }
+              }}
             />
           )}
           <div className="absolute bottom-2 right-2 bg-black/80 text-white text-xs px-1 rounded">

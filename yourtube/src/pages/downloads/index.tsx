@@ -102,8 +102,14 @@ export default function DownloadsPage() {
                   <Link href={`/watch/${video._id}`} className="flex-shrink-0">
                     <div className="relative w-full sm:w-48 aspect-video bg-gray-100 rounded overflow-hidden shadow-sm">
                       <video
-                        src={buildApiUrl(video.filepath)}
+                        src={buildApiUrl(video.filepath || "/video/vdo.mp4")}
                         className="object-cover w-full h-full group-hover:scale-102 transition-transform duration-200"
+                        onError={(e) => {
+                          const target = e.target as HTMLVideoElement;
+                          if (!target.src.includes("/video/vdo.mp4")) {
+                            target.src = "/video/vdo.mp4";
+                          }
+                        }}
                       />
                       <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
                         <div className="bg-white/95 text-black p-2 rounded-full shadow-lg">

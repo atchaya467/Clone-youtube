@@ -20,6 +20,7 @@ export default function VideoPlayer({ video, onNextVideo }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const { user } = useUser();
   const [limitExceeded, setLimitExceeded] = useState(false);
+  const [hasError, setHasError] = useState(false);
 
   const clickCountRef = useRef(0);
   const clickTimerRef = useRef<any>(null);
@@ -190,7 +191,8 @@ export default function VideoPlayer({ video, onNextVideo }: VideoPlayerProps) {
         controls={!limitExceeded}
         onTimeUpdate={handleTimeUpdate}
         onPlay={handlePlay}
-        src={buildApiUrl(video?.filepath)}
+        src={hasError ? "/video/vdo.mp4" : buildApiUrl(video?.filepath)}
+        onError={() => setHasError(true)}
         poster={`/placeholder.svg?height=480&width=854`}
       >
         Your browser does not support the video tag.
